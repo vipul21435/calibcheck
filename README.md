@@ -391,9 +391,10 @@ The five temperatures fitted on the four-way vectors were 1.019, 1.047, 1.037, 1
   p-value is smaller than it should be by an unknown amount.
 - Temperature scaling of the four-way vector, fitted on held-out subjects, barely moves that
   (0.0241 to 0.0232): the fitted temperatures are within 7 % of 1, and one temperature cannot
-  lower low confidences and raise high ones at once. A map on the top-label confidence can
-  (0.0105 to 0.0123 for temperature, Platt and isotonic); log loss moves by less than 0.001
-  for temperature and Platt and rises to 0.6211 for isotonic regression.
+  lower low confidences and raise high ones at once. A map on the top-label confidence can:
+  temperature, Platt and isotonic each bring the ECE from 0.0241 to between 0.0105 and
+  0.0123; log loss moves by less than 0.001 for temperature and Platt and rises to 0.6211
+  for isotonic regression.
 - Isotonic regression and histogram binning show an ECE of exactly 0 on the items they were
   fitted on and 0.0106 and 0.0177 held out, which is the trap described at the top.
 - The comparison does not show that the larger model is better calibrated: the difference in
