@@ -40,7 +40,7 @@ from .recalibrate import (
 from .resample import Consistency, bootstrap, consistency_resampling
 from .stated import digit_preference, parse_stated
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 __all__ = [
     "BinStats",
