@@ -57,6 +57,8 @@ def parse_stated(
         raise ValueError(f"unknown scale {scale!r}; expected one of {SCALES}")
     if isinstance(value, bool) or value is None:
         raise ValueError(f"cannot read a confidence from {value!r}")
+    if isinstance(value, int) and abs(value) > 100:
+        raise ValueError(f"confidence {str(value)[:40]!r} is above 100")
     if isinstance(value, (int, float)):
         return _from_number(float(value), scale, value)
     if not isinstance(value, str):

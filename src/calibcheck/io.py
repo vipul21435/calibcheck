@@ -56,8 +56,10 @@ def parse_confidence(value: Any) -> float:
             number = float(text)
         except ValueError:
             raise ValueError(f"confidence must be a number, got {value!r}") from None
-    elif isinstance(value, (int, float)):
+    elif isinstance(value, float) or (isinstance(value, int) and abs(value) <= 1):
         number = float(value)
+    elif isinstance(value, int):
+        number = math.inf
     else:
         raise ValueError(f"confidence must be a number, got {value!r}")
     if math.isnan(number) or not 0.0 <= number <= 1.0:
@@ -101,8 +103,8 @@ def parse_vector(value: Any) -> list[float]:
         raise ValueError(f"a vector needs at least two numbers, got {value!r}")
     try:
         numbers = [float(v) for v in value]
-    except (TypeError, ValueError):
-        raise ValueError(f"cannot read a vector from {value!r}") from None
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"cannot read a vector from {str(value)[:80]!r}") from None
     if any(math.isnan(v) for v in numbers) or any(isinstance(v, bool) for v in value):
         raise ValueError(f"cannot read a vector from {value!r}")
     return numbers
@@ -112,7 +114,7 @@ def parse_label(value: Any, size: int) -> int:
     """Index of the true class, an integer in [0, size)."""
     try:
         number = float(value) if not isinstance(value, bool) else math.nan
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         number = math.nan
     if math.isnan(number) or number != int(number) or not 0 <= int(number) < size:
         raise ValueError(f"label must be a class index in [0, {size}), got {value!r}")
@@ -136,8 +138,11 @@ def _jsonl_rows(path: Path) -> Iterator[tuple[int, dict[str, Any]]]:
 def _csv_rows(path: Path) -> Iterator[tuple[int, dict[str, Any]]]:
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        for row in reader:
-            yield reader.line_num, row
+        try:
+            for row in reader:
+                yield reader.line_num, row
+        except csv.Error as exc:
+            raise ValueError(f"{path}:{reader.line_num}: invalid CSV: {exc}") from None
 
 
 def read_items(

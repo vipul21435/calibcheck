@@ -117,3 +117,24 @@ def test_parse_helpers():
     for bad in ([True, False], [float("nan"), 1.0], 0.5):
         with pytest.raises(ValueError):
             parse_vector(bad)
+
+
+def test_numbers_too_large_for_a_float_are_ordinary_errors(tmp_path):
+    huge = "1" + "0" * 400
+    for line, kwargs in [
+        ('{"confidence": HUGE, "correct": 1}', {}),
+        ('{"confidence": HUGE, "correct": 1}', {"stated": True}),
+        ('{"probs": [HUGE, 0.5], "label": 0}', {"probs": "probs"}),
+        ('{"probs": [0.5, 0.5], "label": HUGE}', {"probs": "probs"}),
+    ]:
+        path = tmp_path / "huge.jsonl"
+        path.write_text(line.replace("HUGE", huge) + "\n", encoding="utf-8")
+        with pytest.raises(ValueError, match=r"huge\.jsonl:1: "):
+            read_items(path, **kwargs)
+
+
+def test_broken_csv_is_reported_with_its_line(tmp_path):
+    path = tmp_path / "bad.csv"
+    path.write_bytes(b'confidence,correct\n0.5,1\n"0.7,1\n' + b"x" * 200_000 + b"\n")
+    with pytest.raises(ValueError, match=r"bad\.csv:\d+: "):
+        read_items(path)
