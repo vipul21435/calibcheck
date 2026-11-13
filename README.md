@@ -306,15 +306,17 @@ details on the Hugging Face Hub. The two datasets used here are
 [details_meta-llama__Llama-2-7b-hf](https://huggingface.co/datasets/open-llm-leaderboard-old/details_meta-llama__Llama-2-7b-hf)
 and
 [details_meta-llama__Llama-2-70b-hf](https://huggingface.co/datasets/open-llm-leaderboard-old/details_meta-llama__Llama-2-70b-hf).
-For each of the 14,042 MMLU test questions (57 subjects, five-shot prompt) they hold the
-log-likelihood the model gave to each of the four answer letters and the index of the right
-one; a softmax over the four values is the model's probability vector.
+For each of the 14,042 test questions of MMLU ([cais/mmlu](https://huggingface.co/datasets/cais/mmlu),
+57 subjects, four choices; five-shot prompt) they hold the log-likelihood the model gave to
+each of the four answer letters and the index of the right one; a softmax over the four
+values is the model's probability vector.
 
 **Licence.** Neither dataset page states one: the metadata has no licence field and the
 "Licensing Information" section of the card reads "[More Information Needed]" (checked on
 2026-11-13). So no rows are committed here. `scripts/fetch_leaderboard_details.py` downloads
-the files (about 26 MB per model); only the numbers below and the two diagrams are derived
-from them.
+the files (about 26 MB per model) and keeps the scores, the answer index and the subject, not
+the question text; only the numbers below and the two diagrams are derived from them. MMLU
+itself states the MIT licence on its page.
 
 ```
 uv run --with pyarrow python scripts/fetch_leaderboard_details.py \
