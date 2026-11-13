@@ -1,5 +1,6 @@
 import json
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -138,3 +139,19 @@ def test_broken_csv_is_reported_with_its_line(tmp_path):
     path.write_bytes(b'confidence,correct\n0.5,1\n"0.7,1\n' + b"x" * 200_000 + b"\n")
     with pytest.raises(ValueError, match=r"bad\.csv:\d+: "):
         read_items(path)
+
+
+def test_infinite_logits_are_rejected_with_the_line(tmp_path):
+    path = tmp_path / "inf.jsonl"
+    path.write_text(
+        '{"z": [0.25, 0.75], "label": 0}\n{"z": [1e309, 0.0], "label": 0}\n', encoding="utf-8"
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # no numpy warning before the error
+        with pytest.raises(ValueError, match=r"inf\.jsonl:2: a vector must hold finite numbers"):
+            read_items(path, logits="z")
+        with pytest.raises(ValueError, match=r"inf\.jsonl:2: a vector must hold finite numbers"):
+            read_items(path, probs="z")
+    for bad in ([float("inf"), 0.0], [0.0, float("-inf")], "[1e309, 1]", "1e999;0"):
+        with pytest.raises(ValueError, match="finite"):
+            parse_vector(bad)

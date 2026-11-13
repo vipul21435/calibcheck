@@ -89,7 +89,11 @@ def parse_correct(value: Any) -> float:
 
 
 def parse_vector(value: Any) -> list[float]:
-    """A list of numbers: a JSON array, or text such as "[0.1, 0.9]" or "0.1;0.9"."""
+    """A list of finite numbers: a JSON array, or text such as "[0.1, 0.9]" or "0.1;0.9".
+
+    Infinite entries (JSON ``1e309``, ``Infinity``) are rejected: an infinite logit has no
+    softmax, and the caller adds the file name and line to the message.
+    """
     if isinstance(value, str):
         text = value.strip()
         if text.startswith("["):
@@ -107,6 +111,8 @@ def parse_vector(value: Any) -> list[float]:
         raise ValueError(f"cannot read a vector from {str(value)[:80]!r}") from None
     if any(math.isnan(v) for v in numbers) or any(isinstance(v, bool) for v in value):
         raise ValueError(f"cannot read a vector from {value!r}")
+    if any(math.isinf(v) for v in numbers):
+        raise ValueError("a vector must hold finite numbers, found an infinite one")
     return numbers
 
 
