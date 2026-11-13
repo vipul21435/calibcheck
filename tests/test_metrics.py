@@ -164,6 +164,46 @@ def test_reliability_is_the_plugin_squared_calibration_error():
     assert out["uncertainty"] == pytest.approx(out["accuracy"] * (1 - out["accuracy"]))
 
 
+def loop_metrics(conf, correct, edges):
+    """The binned metrics written as plain loops, as a reference for the array code."""
+    n = len(conf)
+    members = [[] for _ in range(len(edges) - 1)]
+    for c, y in zip(conf, correct, strict=True):
+        b = 0
+        for i in range(1, len(edges) - 1):
+            if c >= edges[i]:
+                b = i
+        members[b].append((c, y))
+    ece_, mce_, plugin, debiased = 0.0, 0.0, 0.0, 0.0
+    for rows in members:
+        if not rows:
+            continue
+        k = len(rows)
+        conf_b = sum(c for c, _ in rows) / k
+        acc_b = sum(y for _, y in rows) / k
+        gap = abs(acc_b - conf_b)
+        ece_ += k / n * gap
+        mce_ = max(mce_, gap)
+        plugin += k / n * gap**2
+        if k >= 2:
+            debiased += k / n * (gap**2 - acc_b * (1 - acc_b) / (k - 1))
+    return ece_, mce_, plugin, debiased
+
+
+@pytest.mark.parametrize("strategy", ["width", "mass"])
+@pytest.mark.parametrize("seed", range(5))
+def test_binned_metrics_match_the_plain_loops(strategy, seed):
+    rng = np.random.default_rng(100 + seed)
+    n = int(rng.integers(5, 400))
+    conf = rng.random(n) if seed % 2 else np.round(rng.random(n), 1)
+    correct = (rng.random(n) < 0.3 + 0.5 * conf).astype(float)
+    n_bins = int(rng.integers(1, 30))
+    stats = bin_stats(conf, correct, n_bins=n_bins, strategy=strategy)
+    expected = loop_metrics(conf.tolist(), correct.tolist(), stats.edges.tolist())
+    got = (stats.ece(), stats.mce(), stats.squared_ce(debias=False), stats.squared_ce(debias=True))
+    assert got == pytest.approx(expected, abs=1e-12)
+
+
 def simulate(true_shift: float, n: int, reps: int, seed: int) -> tuple[float, float, float]:
     """Mean plug-in and debiased squared error for a model that states ``s`` and is right
     with probability ``s - true_shift``; the true squared error is ``true_shift ** 2``."""
