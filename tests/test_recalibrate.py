@@ -1,4 +1,5 @@
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -13,6 +14,7 @@ from calibcheck.recalibrate import (
     PlattScaling,
     TemperatureScaling,
     apply_temperature,
+    at_temperature_bound,
     cross_fit,
     cross_fit_temperature,
     fit_apply,
@@ -171,3 +173,26 @@ def test_helpers():
     assert isinstance(make_calibrator("isotonic"), IsotonicRegression)
     with pytest.raises(ValueError, match="unknown method"):
         make_calibrator("beta")
+
+
+def test_a_temperature_on_the_edge_of_the_search_range_warns():
+    confident = np.linspace(0.6, 0.9, 50)
+    with pytest.warns(RuntimeWarning, match=r"edge of its range \[0\.01, 100\]"):
+        low = TemperatureScaling().fit(confident, np.ones(50))  # always right: sharpen forever
+    assert low.temperature == pytest.approx(0.01, rel=1e-4)
+    assert at_temperature_bound(low.temperature)
+    with pytest.warns(RuntimeWarning, match="not a fitted temperature"):
+        high = TemperatureScaling().fit([0.9] * 40, [1, 0] * 20)  # right half the time: flatten
+    assert high.temperature == pytest.approx(100.0, rel=1e-4)
+    logits = np.tile([2.0, 0.0, -1.0], (40, 1))
+    with pytest.warns(RuntimeWarning, match="edge of its range"):
+        assert fit_temperature(logits, np.zeros(40, dtype=int)) == pytest.approx(0.01, rel=1e-4)
+
+
+def test_an_ordinary_temperature_fit_is_silent():
+    conf, correct = overconfident(9)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        model = TemperatureScaling().fit(conf, correct)
+    assert not at_temperature_bound(model.temperature)
+    assert not at_temperature_bound(1.0) and at_temperature_bound(100.0)

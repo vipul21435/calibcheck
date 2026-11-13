@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -229,13 +230,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _show_warning(message, category, filename, lineno, file=None, line=None) -> None:
+    print(f"calibcheck: warning: {message}", file=sys.stderr)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    try:
-        return args.func(args)
-    except (OSError, ValueError, RuntimeError) as exc:
-        print(f"calibcheck: error: {exc}", file=sys.stderr)
-        return 2
+    with warnings.catch_warnings():
+        warnings.showwarning = _show_warning
+        try:
+            return args.func(args)
+        except (OSError, ValueError, RuntimeError) as exc:
+            print(f"calibcheck: error: {exc}", file=sys.stderr)
+            return 2
 
 
 if __name__ == "__main__":

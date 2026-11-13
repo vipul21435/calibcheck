@@ -221,3 +221,14 @@ def test_compare_runs_on_the_two_bundled_examples(capsys):
     assert report["n_items"] == 400 and report["matched_by"] == "id"
     assert by_metric["ece"]["a"] == pytest.approx(0.1210, abs=5e-5)
     assert by_metric["l2_ce_debiased"]["difference"] > 0
+
+
+def test_recalibrate_warns_when_the_temperature_ends_on_a_bound(tmp_path, capsys):
+    rows = [{"confidence": 0.6 + 0.003 * i, "correct": True} for i in range(100)]
+    path = write_jsonl(tmp_path / "all_right.jsonl", rows)
+    assert main(["recalibrate", path, "--method", "temperature"]) == 0
+    captured = capsys.readouterr()
+    assert (
+        "calibcheck: warning: temperature search stopped at the edge of its range" in captured.err
+    )
+    assert "| temperature | 5 folds | " in captured.out

@@ -4,7 +4,8 @@ Four maps from a confidence to a recalibrated confidence, as described by Guo et
 (2017), "On Calibration of Modern Neural Networks", arXiv:1706.04599:
 
 * temperature scaling: ``sigmoid(logit(c) / T)`` for a single confidence, or
-  ``softmax(z / T)`` for a vector of logits, with ``T`` minimising the log loss;
+  ``softmax(z / T)`` for a vector of logits, with ``T`` minimising the log loss over
+  [0.01, 100] (a fit that ends on an edge of that range is flagged with a warning);
 * Platt scaling: ``sigmoid(a * logit(c) + b)`` with ``(a, b)`` by maximum likelihood;
 * isotonic regression: the non-decreasing step function closest to the outcomes in
   squared error (pool adjacent violators), interpolated linearly between its points;
@@ -17,6 +18,7 @@ items into folds, fits on all folds but one and predicts the held-out fold.
 from __future__ import annotations
 
 import math
+import warnings
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
@@ -78,13 +80,42 @@ def _golden_section(f: Callable[[float], float], lo: float, hi: float, tol: floa
     return (a + b) / 2.0
 
 
+def at_temperature_bound(temperature: float) -> bool:
+    """Whether a fitted temperature sits on the edge of the search range [0.01, 100]."""
+    return temperature <= T_MIN * (1.0 + 1e-6) or temperature >= T_MAX * (1.0 - 1e-6)
+
+
 def _fit_log_temperature(loss: Callable[[float], float]) -> float:
-    # The log loss is convex in 1 / T, hence unimodal in log T.
-    return math.exp(_golden_section(lambda u: loss(math.exp(u)), math.log(T_MIN), math.log(T_MAX)))
+    """Minimise ``loss(T)`` over ``T`` in [``T_MIN``, ``T_MAX``] = [0.01, 100].
+
+    The log loss is convex in ``1 / T``, hence unimodal in ``log T``. When it keeps falling
+    towards an end of the range (all answers right or all wrong pushes ``T`` down, a
+    confidence that says nothing about correctness pushes it up) the search stops at that
+    end. Such a value is a limit of the search, not a fitted temperature, so a
+    ``RuntimeWarning`` says so.
+    """
+    t = math.exp(_golden_section(lambda u: loss(math.exp(u)), math.log(T_MIN), math.log(T_MAX)))
+    best = loss(t)
+    for edge in (T_MIN, T_MAX):
+        # Also catches a loss that is flat near an edge because probabilities are clipped.
+        if loss(edge) <= best + 1e-12:
+            warnings.warn(
+                f"temperature search stopped at the edge of its range [{T_MIN:g}, {T_MAX:g}] "
+                f"(T = {edge:g}): the log loss is as low there as anywhere inside, so this "
+                "is not a fitted temperature",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            return edge
+    return t
 
 
 class TemperatureScaling:
-    """``c -> sigmoid(logit(c) / T)``; ``T > 1`` pulls confidences towards one half."""
+    """``c -> sigmoid(logit(c) / T)``; ``T > 1`` pulls confidences towards one half.
+
+    ``T`` is searched in [0.01, 100]; a search that ends on either edge raises a
+    ``RuntimeWarning`` (see ``at_temperature_bound``).
+    """
 
     def __init__(self) -> None:
         self.temperature = 1.0

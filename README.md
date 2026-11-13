@@ -265,7 +265,8 @@ carry the same bias.
 
 **Recalibration** (the four maps as described by Guo et al., 2017). Temperature scaling
 `sigmoid(logit(c) / T)`, or `softmax(z / T)` on a whole vector, with `T` minimising the log
-loss; Platt scaling `sigmoid(a * logit(c) + b)` by maximum likelihood; isotonic regression by
+loss over [0.01, 100] (a search that ends on an edge of that range, as when every answer is
+right, is reported with a warning because it is not a fitted temperature); Platt scaling `sigmoid(a * logit(c) + b)` by maximum likelihood; isotonic regression by
 pool adjacent violators, interpolated linearly; histogram binning with equal-mass bins. Items
 are split into folds (whole groups with `--group`), each map is fitted on all folds but one and
 applied to the held-out fold, and the metrics are computed on the pooled held-out predictions.
