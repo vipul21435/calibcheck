@@ -265,7 +265,10 @@ then draw each outcome as a coin flip with that confidence. The surrogate data a
 by construction, so the spread of their bin accuracies is the band a calibrated model would
 stay in, and the share of surrogates whose plug-in ECE is at least the observed one is a
 p-value for "calibrated". The bias of the plug-in ECE cancels here because the surrogates
-carry the same bias.
+carry the same bias. As a check of the test itself, on 2,000 simulated calibrated samples
+with continuous confidences (200 items each, drawn from Beta(5, 2)) it rejected 106 times at
+the 5 % level, a rate of 5.3 % with a standard error of 0.5 % (`python
+examples/false_alarm_rate.py`, a few minutes).
 
 **Recalibration** (the four maps as described by Guo et al., 2017). Temperature scaling
 `sigmoid(logit(c) / T)`, or `softmax(z / T)` on a whole vector, with `T` minimising the log

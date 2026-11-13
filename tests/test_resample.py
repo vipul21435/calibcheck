@@ -114,3 +114,16 @@ def test_consistency_resampling_with_equal_mass_bins_and_bad_arguments():
         consistency_resampling(conf, correct, n_resamples=0)
     with pytest.raises(ValueError, match="level"):
         consistency_resampling(conf, correct, level=0.0)
+
+
+def test_false_alarm_rate_holds_for_continuous_confidences():
+    # Beta(5, 2) confidences, 200 items, 15 equal-width bins. A review saw 8 % rejections in
+    # 300 runs of this setting; examples/false_alarm_rate.py measures 5.3 % over 2,000 runs.
+    rejections = 0
+    for seed in range(200):
+        rng = np.random.default_rng(10_000 + seed)
+        conf = rng.beta(5, 2, size=200)
+        correct = rng.random(200) < conf
+        result = consistency_resampling(conf, correct, n_resamples=200, seed=seed)
+        rejections += result.p_value <= 0.05
+    assert 3 <= rejections <= 19  # 5 % of 200 is 10
