@@ -163,6 +163,9 @@ examples/quickstart.py` shows the same steps from Python.
 With vectors the confidence is the largest probability (top-label) and the report adds the
 classwise ECE and the log loss and Brier score of the whole vector. With `--stated` the report
 adds how many distinct values the model used and how often it chose multiples of 5 and 10.
+A bare number is read as a probability up to 1 and as a percentage from 10 to 100; between 1
+and 10 it is rejected as ambiguous (1.5 could be 1.5 %, a score out of ten or a typo) unless
+it carries a percent sign or `--scale` says which.
 The built-in word scale has five steps (very low 0.1, low 0.3, medium 0.5, high 0.7, very high
 0.9); it is a convention, so pass the map that matches your own prompt.
 

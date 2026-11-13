@@ -31,6 +31,12 @@ _NUMBER = re.compile(r"^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$")
 def _from_number(number: float, scale: str, shown: Any) -> float:
     if math.isnan(number) or number < 0:
         raise ValueError(f"cannot read a confidence from {shown!r}")
+    if scale == "auto" and 1.0 < number < 10.0:
+        raise ValueError(
+            f"confidence {shown!r} is ambiguous: a bare number between 1 and 10 could be a "
+            "percentage, a score out of ten or a typo; add a percent sign or set the scale "
+            "to unit or percent"
+        )
     if scale == "unit" or (scale == "auto" and number <= 1.0):
         value = number
     elif scale == "percent" or (scale == "auto" and number <= 100.0):
@@ -50,8 +56,9 @@ def parse_stated(
     Accepted: a number or numeric text ("0.85", 0.85), a percentage ("85%", "85 %") and
     any phrase in ``words`` (case and surrounding punctuation ignored). A bare number
     follows ``scale``: "unit" reads it as a probability, "percent" divides it by 100, and
-    "auto" (the default) reads values up to 1 as probabilities and values above 1 as
-    percentages, so a bare 1 means certainty, not one percent.
+    "auto" (the default) reads values up to 1 as probabilities and values from 10 to 100 as
+    percentages. Under "auto" a bare 1 means certainty, not one percent, and a bare value
+    strictly between 1 and 10 is rejected: 1.5 could be 1.5 %, a score out of ten or a typo.
     """
     if scale not in SCALES:
         raise ValueError(f"unknown scale {scale!r}; expected one of {SCALES}")

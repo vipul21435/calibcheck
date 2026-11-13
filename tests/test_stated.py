@@ -81,3 +81,19 @@ def test_digit_preference_ignores_floating_point_noise():
     out = digit_preference([0.1 + 0.2, 0.3, 0.30000000000000004])
     assert out["distinct_values"] == 1
     assert out["share_multiple_of_10"] == 1.0
+
+
+@pytest.mark.parametrize("value", ["1.5", 1.5, "5", 9.99, 2])
+def test_bare_values_between_one_and_ten_are_ambiguous_under_auto(value):
+    with pytest.raises(ValueError, match="ambiguous"):
+        parse_stated(value)
+    assert parse_stated(value, scale="percent") == pytest.approx(float(value) / 100)
+    with pytest.raises(ValueError, match="outside the unit scale"):
+        parse_stated(value, scale="unit")
+
+
+def test_the_edges_of_the_ambiguous_range_are_read_as_before():
+    assert parse_stated(1) == 1.0
+    assert parse_stated("10") == pytest.approx(0.10)
+    assert parse_stated("5%") == pytest.approx(0.05)
+    assert parse_stated("1.5 %") == pytest.approx(0.015)
