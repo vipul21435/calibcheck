@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Sequence
+from typing import Protocol
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -28,6 +29,14 @@ from .multiclass import softmax
 
 EPS = 1e-12
 T_MIN, T_MAX = 1e-2, 1e2
+
+
+class Calibrator(Protocol):
+    """A map from confidence to recalibrated confidence, fitted on outcomes."""
+
+    def fit(self, confidence: ArrayLike, correct: ArrayLike) -> Calibrator: ...
+
+    def predict(self, confidence: ArrayLike) -> np.ndarray: ...
 
 
 def logit(p: ArrayLike) -> np.ndarray:
@@ -199,7 +208,7 @@ class HistogramBinning:
         return self.value_[assign_bins(confidence, self.edges_)]
 
 
-METHODS: dict[str, Callable[[], object]] = {
+METHODS: dict[str, Callable[[], Calibrator]] = {
     "temperature": TemperatureScaling,
     "platt": PlattScaling,
     "isotonic": IsotonicRegression,
@@ -207,7 +216,7 @@ METHODS: dict[str, Callable[[], object]] = {
 }
 
 
-def make_calibrator(method: str):
+def make_calibrator(method: str) -> Calibrator:
     """A fresh calibrator by name: temperature, platt, isotonic or histogram."""
     try:
         return METHODS[method]()
