@@ -62,7 +62,7 @@ def reliability_diagram(
     fig, (top, bottom) = plt.subplots(
         2,
         1,
-        figsize=(6.0, 6.6),
+        figsize=(6.0, 7.8),
         dpi=150,
         sharex=True,
         gridspec_kw={"height_ratios": [3.2, 1.0], "hspace": 0.08},
@@ -86,7 +86,6 @@ def reliability_diagram(
     )
     top.set_xlim(0.0, 1.0)
     top.set_ylim(0.0, 1.0)
-    top.set_aspect("equal", adjustable="box")
     top.set_ylabel("accuracy", color=INK, fontsize=10)
     handles = [
         plt.Line2D([], [], color=SERIES, linewidth=2.0, marker="o", markersize=5),
