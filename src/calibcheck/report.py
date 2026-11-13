@@ -23,6 +23,9 @@ from .metrics import (
 from .multiclass import multiclass_log_loss, top_label, vector_summary
 from .recalibrate import (
     METHODS,
+    Calibrator,
+    PlattScaling,
+    TemperatureScaling,
     apply_temperature,
     cross_fit,
     cross_fit_temperature,
@@ -164,6 +167,15 @@ def build_report(
     return report
 
 
+def _parameters(model: Calibrator) -> dict[str, float] | None:
+    """Fitted parameters of the two parametric maps, for the report."""
+    if isinstance(model, TemperatureScaling):
+        return {"temperature": float(model.temperature)}
+    if isinstance(model, PlattScaling):
+        return {"a": float(model.a), "b": float(model.b)}
+    return None
+
+
 def build_recalibration_report(
     items: Items,
     *,
@@ -197,11 +209,17 @@ def build_recalibration_report(
     held_out = "fitted on the other file" if fit_items is not None else f"{n_folds} folds"
     rows = [row("none", "-", c, y)]
     for method in methods:
+        extra: dict[str, Any] = {}
         if fit_items is not None:
             after = fit_apply(method, fit_items.confidence, fit_items.correct, c)
         else:
-            after = cross_fit(method, c, y, n_folds=n_folds, seed=seed, groups=items.group)
-        rows.append(row(method, held_out, after, y))
+            models: list[Calibrator] = []
+            after = cross_fit(
+                method, c, y, n_folds=n_folds, seed=seed, groups=items.group, models=models
+            )
+            if _parameters(models[0]) is not None:
+                extra["parameters"] = [_parameters(model) for model in models]
+        rows.append(row(method, held_out, after, y, **extra))
         if in_sample:
             same = np.clip(make_calibrator(method).fit(c, y).predict(c), 0.0, 1.0)
             rows.append(row(method, "same items (optimistic)", same, y))

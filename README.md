@@ -430,8 +430,13 @@ the bootstrap treats the 57 subjects as the units, which makes the intervals wid
   they fit poorly, as the quickstart shows; isotonic regression or histogram binning are the
   safer choice there. Platt scaling is plain maximum likelihood, without smoothed targets.
 - Pooled held-out predictions come from one map per fold, so AUROC and AURC after
-  cross-fitting are slightly pessimistic (the quickstart table shows Platt scaling falling
-  below 0.5), and isotonic regression overfits on a few hundred items.
+  cross-fitting can be much lower than before it: in the quickstart, Platt scaling takes
+  AUROC from 0.5833 to 0.4709. The five slopes fitted there lie between 0.006 and 0.023
+  (`calibcheck recalibrate examples/example.jsonl --method platt --format json` lists them),
+  so each fold's map is almost constant and the pooled order follows the fold intercepts
+  instead of the confidences. Judge ranking from a single map: `--fit-on`, or the
+  `--in-sample` rows, where a monotone map leaves AUROC unchanged. Isotonic regression also
+  overfits on a few hundred items.
 - Classwise metrics need vectors of one length; for ragged vectors only top-label metrics,
   log loss and Brier score are reported. Classwise L2 and bootstrap intervals for the
   recalibration table are not implemented.

@@ -277,3 +277,13 @@ def test_compare_of_plain_confidences_has_no_vector_rows(tmp_path, capsys, overc
     report = run_json(capsys, ["compare", overconfident, overconfident, "--bootstrap", "10"])
     assert not report["vectors"]
     assert "nll" not in {row["metric"] for row in report["rows"]}
+
+
+def test_recalibration_report_lists_the_parameters_of_each_fold(overconfident, capsys):
+    report = run_json(capsys, ["recalibrate", overconfident, "--seed", "1"])
+    rows = {row["method"]: row for row in report["rows"]}
+    assert [set(p) for p in rows["platt"]["parameters"]] == [{"a", "b"}] * 5
+    assert [set(p) for p in rows["temperature"]["parameters"]] == [{"temperature"}] * 5
+    assert all(2.0 < p["temperature"] < 3.2 for p in rows["temperature"]["parameters"])
+    assert all(0.3 < p["a"] < 0.5 for p in rows["platt"]["parameters"])  # logits 2.5 times too big
+    assert "parameters" not in rows["isotonic"] and "parameters" not in rows["none"]

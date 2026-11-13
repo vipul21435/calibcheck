@@ -196,3 +196,13 @@ def test_an_ordinary_temperature_fit_is_silent():
         model = TemperatureScaling().fit(conf, correct)
     assert not at_temperature_bound(model.temperature)
     assert not at_temperature_bound(1.0) and at_temperature_bound(100.0)
+
+
+def test_cross_fit_can_hand_back_the_map_of_each_fold():
+    conf, correct = overconfident(10, n=500)
+    models = []
+    out = cross_fit("platt", conf, correct, n_folds=5, seed=2, models=models)
+    folds = fold_ids(500, 5, seed=2)
+    assert len(models) == 5
+    for f, model in enumerate(models):
+        assert out[folds == f] == pytest.approx(model.predict(conf[folds == f]), abs=1e-12)

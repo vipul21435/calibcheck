@@ -285,15 +285,22 @@ def cross_fit(
     n_folds: int = 5,
     seed: int = 0,
     groups: Sequence[object] | None = None,
+    models: list[Calibrator] | None = None,
 ) -> np.ndarray:
     """Out-of-fold recalibrated confidences: every item is mapped by a model fitted on the
-    other folds, never on itself."""
+    other folds, never on itself. Pass a list as ``models`` to collect the map of each fold.
+
+    The pooled result mixes one map per fold. Its calibration is what the folds have in
+    common, but its ranking (AUROC, AURC) also reflects differences between the maps.
+    """
     c, y = as_arrays(confidence, correct)
     folds = fold_ids(c.size, n_folds, seed=seed, groups=groups)
     out = np.empty_like(c)
     for f in range(n_folds):
         held_out = folds == f
         model = make_calibrator(method).fit(c[~held_out], y[~held_out])
+        if models is not None:
+            models.append(model)
         out[held_out] = model.predict(c[held_out])
     return np.clip(out, 0.0, 1.0)
 
