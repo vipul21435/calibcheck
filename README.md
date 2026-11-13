@@ -290,6 +290,7 @@ References:
   and Forecasting 22(3), 651-661.
 - M. P. Naeini, G. Cooper, M. Hauskrecht (2015). Obtaining well calibrated probabilities using
   Bayesian binning. Proceedings of the AAAI Conference on Artificial Intelligence 29(1).
+  https://doi.org/10.1609/aaai.v29i1.9602
 - C. Guo, G. Pleiss, Y. Sun, K. Q. Weinberger (2017). On calibration of modern neural
   networks. https://arxiv.org/abs/1706.04599
 - Y. Geifman, R. El-Yaniv (2017). Selective classification for deep neural networks.
