@@ -12,9 +12,24 @@ from numpy.typing import ArrayLike
 
 from .binning import Strategy
 from .io import Items
-from .metrics import DEFAULT_BINS, DEFAULT_COVERAGE, as_arrays, bin_stats, summary
+from .metrics import (
+    DEFAULT_BINS,
+    DEFAULT_COVERAGE,
+    as_arrays,
+    bin_stats,
+    risk_coverage,
+    summary,
+)
 from .multiclass import top_label, vector_summary
-from .recalibrate import METHODS, cross_fit, cross_fit_temperature, fit_apply, make_calibrator
+from .recalibrate import (
+    METHODS,
+    apply_temperature,
+    cross_fit,
+    cross_fit_temperature,
+    fit_apply,
+    fit_temperature,
+    make_calibrator,
+)
 from .resample import bootstrap
 from .stated import digit_preference
 
@@ -101,6 +116,7 @@ def build_report(
         return out
 
     metrics = statistic(np.arange(c.size))
+    curve = risk_coverage(c, y)
     bins = []
     for i in range(stats.n_bins):
         empty = stats.count[i] == 0
@@ -128,6 +144,9 @@ def build_report(
         "top_label": probs is not None,
         "metrics": {key: _clean(value) for key, value in metrics.items()},
         "bins": bins,
+        "risk_coverage": [
+            {"coverage": q / 10, "accuracy": curve.accuracy_at(q / 10)} for q in range(1, 11)
+        ],
     }
     if n_resamples:
         bounds = bootstrap(
@@ -188,8 +207,6 @@ def build_recalibration_report(
             rows.append(row(method, "same items (optimistic)", same, y))
     if items.logits is not None and items.label is not None and "temperature" in methods:
         if fit_items is not None and fit_items.logits is not None:
-            from .recalibrate import apply_temperature, fit_temperature
-
             temperatures = [fit_temperature(fit_items.logits, fit_items.label)]
             scaled = apply_temperature(items.logits, temperatures[0])
         else:
@@ -345,6 +362,19 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"| [{row['lower']:.3f}, {row['upper']:.3f}{close} | {row['count']} "
             f"| {_number(row['confidence'])} | {_number(row['accuracy'])} "
             f"| {_number(row['gap'])} |"
+        )
+    if report.get("risk_coverage"):
+        lines += [
+            "",
+            "| coverage | "
+            + " | ".join(f"{p['coverage']:.0%}" for p in report["risk_coverage"])
+            + " |",
+        ]
+        lines.append("|---|" + "---|" * len(report["risk_coverage"]))
+        lines.append(
+            "| accuracy | "
+            + " | ".join(_number(p["accuracy"]) for p in report["risk_coverage"])
+            + " |"
         )
     stated = report.get("stated")
     if stated:

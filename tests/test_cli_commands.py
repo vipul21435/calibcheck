@@ -198,3 +198,15 @@ def test_diagram_writes_a_png_and_prints_the_test(tmp_path, capsys, overconfiden
     assert "consistency test: plug-in ECE 0." in out
     assert "p = 0.0099 (100 resamples)" in out
     assert main([*args, "--binning", "mass", "--bins", "8"]) == 0
+
+
+def test_report_holds_the_risk_coverage_curve(overconfident, capsys):
+    report = run_json(capsys, ["metrics", overconfident, "--bootstrap", "0"])
+    curve = report["risk_coverage"]
+    assert [point["coverage"] for point in curve] == [q / 10 for q in range(1, 11)]
+    assert curve[-1]["accuracy"] == pytest.approx(report["metrics"]["accuracy"])
+    assert curve[7]["accuracy"] == pytest.approx(report["metrics"]["accuracy_at_coverage"])
+    assert curve[0]["accuracy"] > curve[-1]["accuracy"]
+    assert main(["metrics", overconfident, "--bootstrap", "0"]) == 0
+    out = capsys.readouterr().out
+    assert "| coverage | 10% | 20% | 30% | 40% | 50% | 60% | 70% | 80% | 90% | 100% |" in out

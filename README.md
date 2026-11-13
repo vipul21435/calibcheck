@@ -74,7 +74,14 @@ $ calibcheck metrics examples/example.jsonl --binning mass
 | [0.900, 0.950) | 108 | 0.9000 | 0.7500 | -0.1500 |
 | [0.950, 1.000) | 54 | 0.9500 | 0.7963 | -0.1537 |
 | [1.000, 1.000] | 41 | 1.0000 | 0.7561 | -0.2439 |
+
+| coverage | 10% | 20% | 30% | 40% | 50% | 60% | 70% | 80% | 90% | 100% |
+|---|---|---|---|---|---|---|---|---|---|---|
+| accuracy | 0.7561 | 0.7757 | 0.7729 | 0.7672 | 0.7638 | 0.7543 | 0.7471 | 0.7423 | 0.7380 | 0.7150 |
 ```
+
+The last table is the risk-coverage curve at ten points: the accuracy on the most confident
+10 %, 20 %, ... of the items.
 
 Because the example is simulated, the error of the process behind it is known:
 `python examples/make_example.py` prints a squared calibration error of 0.0087 and an ECE of
