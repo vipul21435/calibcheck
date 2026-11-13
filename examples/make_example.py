@@ -1,0 +1,38 @@
+"""Write examples/example.jsonl: simulated answers of an overconfident model.
+
+The data is synthetic, not measured from any model. Each item states a confidence taken
+from a short list of round values and is correct with probability ``0.3 + 0.55 * c``:
+slightly underconfident at 0.5 and 0.6, increasingly overconfident above that.
+
+Run from the repository root:
+
+    python examples/make_example.py
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+
+LEVELS = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0]
+SHARES = [0.05, 0.08, 0.12, 0.25, 0.25, 0.15, 0.10]
+N_ITEMS = 400
+SEED = 2026
+
+
+def main() -> None:
+    rng = np.random.default_rng(SEED)
+    confidence = rng.choice(LEVELS, size=N_ITEMS, p=SHARES)
+    correct = rng.random(N_ITEMS) < 0.3 + 0.55 * confidence
+    out = Path(__file__).with_name("example.jsonl")
+    with out.open("w", encoding="utf-8") as handle:
+        for i, (c, y) in enumerate(zip(confidence, correct, strict=True), start=1):
+            row = {"id": f"q{i:03d}", "confidence": float(c), "correct": bool(y)}
+            handle.write(json.dumps(row) + "\n")
+    print(f"wrote {N_ITEMS} items to {out.name}")
+
+
+if __name__ == "__main__":
+    main()
