@@ -11,10 +11,14 @@ binning splits the ``n`` items into bins; bin ``b`` has ``n_b`` items, mean conf
   plug-in estimate is biased upward: even a calibrated model shows ``acc_b != conf_b`` in
   a finite sample. The debiased estimate subtracts ``acc_b * (1 - acc_b) / (n_b - 1)``
   from each squared gap (Kumar, Liang and Ma, 2019, "Verified Uncertainty Calibration",
-  arXiv:1909.10155, Definitions 5.1 and 5.2).
+  arXiv:1909.10155, Definitions 5.1 and 5.2). The same paper debiases the ECE with a
+  normal approximation of each bin accuracy (its Definition G.3); see ``BinStats.ece``.
 * The Brier score (Brier, 1950) is ``mean((c_i - y_i) ** 2)``. Murphy (1973) splits it
   into reliability - resolution + uncertainty for forecasts that are constant within a
   bin; the reliability term is the plug-in squared calibration error.
+* AUROC, the risk-coverage curve and its area (AURC) measure how well the confidence
+  ranks right answers above wrong ones (selective prediction, Geifman and El-Yaniv, 2017,
+  arXiv:1705.08500). They do not depend on calibration.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from numpy.typing import ArrayLike
 from .binning import Strategy, assign_bins, make_edges
 
 DEFAULT_BINS = 15
+DEFAULT_COVERAGE = 0.8
 
 
 def as_arrays(confidence: ArrayLike, correct: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
@@ -53,6 +58,18 @@ def as_arrays(confidence: ArrayLike, correct: ArrayLike) -> tuple[np.ndarray, np
     if not np.all((y == 0.0) | (y == 1.0)):
         raise ValueError("correct must contain only 0/1 or booleans")
     return c, y
+
+
+def folded_normal_mean(mu: ArrayLike, sd: ArrayLike) -> np.ndarray:
+    """``E|X|`` for ``X ~ N(mu, sd ** 2)``, elementwise; equals ``|mu|`` where ``sd == 0``."""
+    mu = np.abs(np.asarray(mu, dtype=float))
+    sd = np.asarray(sd, dtype=float)
+    out = mu.copy()
+    pos = sd > 0
+    z = mu[pos] / sd[pos]
+    erf = np.array([math.erf(v / math.sqrt(2.0)) for v in z])
+    out[pos] = sd[pos] * math.sqrt(2.0 / math.pi) * np.exp(-0.5 * z * z) + mu[pos] * erf
+    return out
 
 
 @dataclass(frozen=True)
@@ -87,10 +104,27 @@ class BinStats:
         """``acc_b - conf_b``; negative when the bin is overconfident, NaN when empty."""
         return self.accuracy - self.confidence
 
-    def ece(self) -> float:
-        """Plug-in expected calibration error over the non-empty bins."""
+    def ece(self, debias: bool = False) -> float:
+        """Expected calibration error over the non-empty bins, plug-in or debiased.
+
+        The debiased value follows Definition G.3 of Kumar, Liang and Ma (2019): redraw
+        each bin accuracy from ``N(acc_b, acc_b * (1 - acc_b) / n_b)``, take the expected
+        plug-in ECE of the redrawn bins, and subtract the excess over the observed
+        plug-in value. The expectation is the mean of a folded normal, so it is computed
+        in closed form here instead of by simulation. The paper calls this a heuristic;
+        it reduces the bias and does not remove it. A bin whose accuracy is 0 or 1 has
+        zero estimated variance and gets no correction. The result can be negative.
+        """
         m = self.nonempty
-        return float(np.sum(self.weight[m] * np.abs(self.gap[m])))
+        w = self.weight[m]
+        gap = np.abs(self.gap[m])
+        plugin = float(np.sum(w * gap))
+        if not debias:
+            return plugin
+        acc = self.accuracy[m]
+        sd = np.sqrt(acc * (1.0 - acc) / self.count[m])
+        expected = float(np.sum(w * folded_normal_mean(gap, sd)))
+        return plugin - (expected - plugin)
 
     def mce(self) -> float:
         """Largest absolute gap over the non-empty bins."""
@@ -150,9 +184,13 @@ def ece(
     *,
     n_bins: int = DEFAULT_BINS,
     strategy: Strategy = "width",
+    debias: bool = False,
 ) -> float:
-    """Plug-in expected calibration error, ``sum_b (n_b / n) * |acc_b - conf_b|``."""
-    return bin_stats(confidence, correct, n_bins=n_bins, strategy=strategy).ece()
+    """Expected calibration error, ``sum_b (n_b / n) * |acc_b - conf_b|``.
+
+    ``debias=True`` subtracts an estimate of the bias (see ``BinStats.ece``).
+    """
+    return bin_stats(confidence, correct, n_bins=n_bins, strategy=strategy).ece(debias=debias)
 
 
 def mce(
@@ -188,6 +226,88 @@ def brier_score(confidence: ArrayLike, correct: ArrayLike) -> float:
     """Mean squared difference between confidence and outcome (Brier, 1950)."""
     c, y = as_arrays(confidence, correct)
     return float(np.mean((c - y) ** 2))
+
+
+def log_loss(confidence: ArrayLike, correct: ArrayLike, *, eps: float = 1e-12) -> float:
+    """Mean negative log-likelihood of the outcomes, confidences clipped to [eps, 1 - eps].
+
+    Without the clip one wrong answer given with confidence 1 makes the loss infinite.
+    """
+    c, y = as_arrays(confidence, correct)
+    p = np.clip(c, eps, 1.0 - eps)
+    return float(-np.mean(y * np.log(p) + (1.0 - y) * np.log1p(-p)))
+
+
+def auroc(confidence: ArrayLike, correct: ArrayLike) -> float:
+    """Probability that a right answer has higher confidence than a wrong one.
+
+    Ties count one half. NaN when all answers are right or all are wrong.
+    """
+    c, y = as_arrays(confidence, correct)
+    n_pos = float(y.sum())
+    n_neg = float(y.size) - n_pos
+    if n_pos == 0.0 or n_neg == 0.0:
+        return float("nan")
+    _, inverse, counts = np.unique(c, return_inverse=True, return_counts=True)
+    rank = (np.cumsum(counts) - (counts - 1) / 2.0)[inverse]
+    return float((rank[y == 1.0].sum() - n_pos * (n_pos + 1.0) / 2.0) / (n_pos * n_neg))
+
+
+@dataclass(frozen=True)
+class RiskCoverage:
+    """Selective risk at every coverage ``k / n``, most confident items first.
+
+    ``risk[k - 1]`` is the error rate among the ``k`` most confident items. Items with
+    equal confidence cannot be ordered, so within a run of ties the errors are spread
+    evenly: the value is the expectation over a random order of the tied items, which
+    makes the curve independent of the input order.
+    """
+
+    coverage: np.ndarray
+    risk: np.ndarray
+
+    @property
+    def aurc(self) -> float:
+        """Area under the risk-coverage curve: the mean risk over all coverages."""
+        return float(np.mean(self.risk))
+
+    def accuracy_at(self, coverage: float) -> float:
+        """Accuracy on the most confident ``ceil(coverage * n)`` items."""
+        if not 0.0 < coverage <= 1.0:
+            raise ValueError("coverage must lie in (0, 1]")
+        k = max(1, math.ceil(coverage * self.risk.size - 1e-9))
+        return float(1.0 - self.risk[k - 1])
+
+
+def risk_coverage(confidence: ArrayLike, correct: ArrayLike) -> RiskCoverage:
+    """Risk-coverage curve of answering only the most confident items."""
+    c, y = as_arrays(confidence, correct)
+    n = c.size
+    order = np.argsort(-c, kind="stable")
+    c_sorted = c[order]
+    errors = 1.0 - y[order]
+    new_run = np.concatenate(([True], c_sorted[1:] != c_sorted[:-1]))
+    run = np.cumsum(new_run) - 1
+    run_size = np.bincount(run)
+    run_errors = np.bincount(run, weights=errors)
+    run_start = np.concatenate(([0], np.cumsum(run_size)[:-1]))
+    errors_before = np.concatenate(([0.0], np.cumsum(run_errors)[:-1]))
+    position = np.arange(n) - run_start[run] + 1
+    expected_errors = errors_before[run] + position * run_errors[run] / run_size[run]
+    k = np.arange(1, n + 1)
+    return RiskCoverage(coverage=k / n, risk=expected_errors / k)
+
+
+def aurc(confidence: ArrayLike, correct: ArrayLike) -> float:
+    """Area under the risk-coverage curve (lower is better)."""
+    return risk_coverage(confidence, correct).aurc
+
+
+def accuracy_at_coverage(
+    confidence: ArrayLike, correct: ArrayLike, coverage: float = DEFAULT_COVERAGE
+) -> float:
+    """Accuracy when only the most confident share ``coverage`` of the items is answered."""
+    return risk_coverage(confidence, correct).accuracy_at(coverage)
 
 
 @dataclass(frozen=True)
@@ -242,18 +362,21 @@ def summary(
     *,
     n_bins: int = DEFAULT_BINS,
     strategy: Strategy = "width",
+    coverage: float = DEFAULT_COVERAGE,
 ) -> dict[str, float]:
-    """All metrics implemented so far, as a flat dictionary of floats."""
+    """Every metric for a confidence and a correctness column, as a flat dictionary."""
     c, y = as_arrays(confidence, correct)
     stats = bin_stats(c, y, n_bins=n_bins, strategy=strategy)
     dec = _decompose(c, y, stats)
     sq_plugin = stats.squared_ce(debias=False)
     sq_debiased = stats.squared_ce(debias=True)
+    curve = risk_coverage(c, y)
     return {
         "n": float(c.size),
         "accuracy": float(np.mean(y)),
         "mean_confidence": float(np.mean(c)),
         "ece": stats.ece(),
+        "ece_debiased": stats.ece(debias=True),
         "mce": stats.mce(),
         "sq_ce_plugin": sq_plugin,
         "sq_ce_debiased": sq_debiased,
@@ -264,4 +387,8 @@ def summary(
         "resolution": dec.resolution,
         "uncertainty": dec.uncertainty,
         "within_bin": dec.within_bin,
+        "log_loss": log_loss(c, y),
+        "auroc": auroc(c, y),
+        "aurc": curve.aurc,
+        "accuracy_at_coverage": curve.accuracy_at(coverage),
     }
