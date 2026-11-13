@@ -33,6 +33,12 @@ def main() -> None:
             handle.write(json.dumps(row) + "\n")
     print(f"wrote {N_ITEMS} items to {out.name}")
 
+    # The generating process is known, so its calibration error is too.
+    gaps = [c - (0.3 + 0.55 * c) for c in LEVELS]
+    true_ece = sum(s * abs(g) for s, g in zip(SHARES, gaps, strict=True))
+    true_sq = sum(s * g * g for s, g in zip(SHARES, gaps, strict=True))
+    print(f"generating process: ECE {true_ece:.4f}, squared calibration error {true_sq:.4f}")
+
 
 if __name__ == "__main__":
     main()
