@@ -126,6 +126,15 @@ def test_report_without_a_source_and_json_round_trip():
     assert json.loads(render_json(report)) == report
 
 
+def test_tiny_negative_values_are_not_printed_as_minus_zero():
+    conf, correct = zip(*ROWS, strict=True)
+    report = build_report(conf, correct, n_bins=10)
+    report["metrics"]["within_bin"] = -2.8e-17
+    text = render_markdown(report)
+    assert "| within-bin term | 0.0000 |" in text
+    assert "-0.0000" not in text
+
+
 def test_module_entry_point_runs_on_the_bundled_example():
     done = subprocess.run(
         [sys.executable, "-m", "calibcheck", "metrics", str(EXAMPLE)],

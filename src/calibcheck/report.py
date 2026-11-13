@@ -75,7 +75,10 @@ def render_json(report: dict[str, Any]) -> str:
 
 
 def _number(value: float | None) -> str:
-    return "-" if value is None else f"{value:.4f}"
+    if value is None:
+        return "-"
+    text = f"{value:.4f}"
+    return "0.0000" if text == "-0.0000" else text
 
 
 def render_markdown(report: dict[str, Any]) -> str:
