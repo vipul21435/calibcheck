@@ -39,6 +39,9 @@ def overconfident(tmp_path):
 
 
 def run_json(capsys, args):
+    """Run a command and parse its JSON report (asked for unless a format is given)."""
+    if "--format" not in args:
+        args = [*args, "--format", "json"]
     assert main(args) == 0
     return json.loads(capsys.readouterr().out)
 
@@ -80,13 +83,6 @@ def test_metrics_from_logit_vectors(tmp_path, capsys):
     assert "Confidence is the largest probability of each vector (top-label)." in out
     assert "| classwise ECE, plug-in | 0." in out
     assert "| log loss of the full vector | " in out
-
-
-def run_json(capsys, args):  # noqa: F811 - JSON output unless a format is already given
-    if "--format" not in args:
-        args = [*args, "--format", "json"]
-    assert main(args) == 0
-    return json.loads(capsys.readouterr().out)
 
 
 def test_metrics_reads_stated_confidence_and_reports_digit_preference(tmp_path, capsys):
