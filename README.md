@@ -98,7 +98,7 @@ $ calibcheck recalibrate examples/example.jsonl --in-sample
 
 400 items; each map is fitted on 4 of 5 folds and scored on the held-out fold. Metrics use 15 equal-width bins.
 
-| method | fitted on | ECE, plug-in | ECE, debiased | L2 CE, debiased | Brier | log loss | AUROC |
+| method | fitted on | ECE, plug-in | ECE, debiased | L2 CE, debiased | Brier | top-label log loss | AUROC |
 |---|---|---|---|---|---|---|---|
 | none | - | 0.1210 | 0.1126 | 0.1206 | 0.2158 | 1.2696 | 0.5833 |
 | temperature | 5 folds | 0.1752 | 0.1738 | 0.1746 | 0.2336 | 0.6637 | 0.5718 |
@@ -367,7 +367,7 @@ makes it reject more readily than a test over subjects would.
 Recalibration of Llama-2-7b, each map fitted on four folds of subjects and scored on the
 fifth (`recalibrate`, above):
 
-| method | fitted on | ECE, plug-in | ECE, debiased | log loss |
+| method | fitted on | ECE, plug-in | ECE, debiased | top-label log loss |
 |---|---|---|---|---|
 | none | - | 0.0241 | 0.0229 | 0.6135 |
 | temperature on the four-way vector | 5 folds | 0.0232 | 0.0220 | 0.6138 |
@@ -379,7 +379,10 @@ fifth (`recalibrate`, above):
 | histogram | same items (optimistic) | 0.0000 | -0.0081 | 0.6129 |
 
 The five temperatures fitted on the four-way vectors were 1.019, 1.047, 1.037, 1.063 and
-1.026.
+1.026. The last column is the binary log loss of the top-label confidence. The log loss of
+the whole four-way vector, which is what temperature scaling of the vector minimises, is
+1.2297 before and 1.2298 after on the held-out folds (printed under the table by the same
+command).
 
 **What this shows, stated carefully.**
 
@@ -394,11 +397,12 @@ The five temperatures fitted on the four-way vectors were 1.019, 1.047, 1.037, 1
   rejects as well (p = 0.001), but it treats the 14,042 questions as independent, so that
   p-value is smaller than it should be by an unknown amount.
 - Temperature scaling of the four-way vector, fitted on held-out subjects, barely moves that
-  (0.0241 to 0.0232): the fitted temperatures are within 7 % of 1, and one temperature cannot
-  lower low confidences and raise high ones at once. A map on the top-label confidence can:
-  temperature, Platt and isotonic each bring the ECE from 0.0241 to between 0.0105 and
-  0.0123; log loss moves by less than 0.001 for temperature and Platt and rises to 0.6211
-  for isotonic regression.
+  (0.0241 to 0.0232): the fitted temperatures are within 7 % of 1, the four-way log loss does
+  not improve (1.2297 to 1.2298), and one temperature cannot lower low confidences and raise
+  high ones at once. A map on the top-label confidence can: temperature, Platt and isotonic
+  each bring the ECE from 0.0241 to between 0.0105 and 0.0123. Their top-label log loss, a
+  different quantity from the four-way loss, moves by less than 0.001 for temperature and
+  Platt and rises to 0.6211 for isotonic regression.
 - Isotonic regression and histogram binning show an ECE of exactly 0 on the items they were
   fitted on and 0.0106 and 0.0177 held out, which is the trap described at the top.
 - The comparison does not show that the larger model is better calibrated: the difference in

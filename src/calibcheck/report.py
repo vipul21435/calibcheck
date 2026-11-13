@@ -20,7 +20,7 @@ from .metrics import (
     risk_coverage,
     summary,
 )
-from .multiclass import top_label, vector_summary
+from .multiclass import multiclass_log_loss, top_label, vector_summary
 from .recalibrate import (
     METHODS,
     apply_temperature,
@@ -63,7 +63,7 @@ RECALIBRATION_COLUMNS: tuple[tuple[str, str], ...] = (
     ("ece_debiased", "ECE, debiased"),
     ("l2_ce_debiased", "L2 CE, debiased"),
     ("brier", "Brier"),
-    ("log_loss", "log loss"),
+    ("log_loss", "top-label log loss"),
     ("auroc", "AUROC"),
 )
 
@@ -214,7 +214,19 @@ def build_recalibration_report(
                 items.logits, items.label, n_folds=n_folds, seed=seed, groups=items.group
             )
         conf, corr = top_label(scaled, items.label)
-        rows.append(row("temperature on vectors", held_out, conf, corr, temperatures=temperatures))
+        rows.append(
+            row(
+                "temperature on vectors",
+                held_out,
+                conf,
+                corr,
+                temperatures=temperatures,
+                vector_log_loss=multiclass_log_loss(scaled, items.label),
+            )
+        )
+    vector_log_loss = None
+    if items.probs is not None and items.label is not None:
+        vector_log_loss = multiclass_log_loss(items.probs, items.label)
     return {
         "source": source,
         "n_items": len(items),
@@ -222,6 +234,7 @@ def build_recalibration_report(
         "seed": seed,
         "grouped": items.group is not None,
         "binning": {"strategy": strategy, "requested_bins": int(n_bins)},
+        "vector_log_loss_before": vector_log_loss,
         "rows": rows,
     }
 
@@ -417,10 +430,21 @@ def render_recalibration_markdown(report: dict[str, Any]) -> str:
     for row in report["rows"]:
         cells = " | ".join(_number(row[key]) for key, _ in RECALIBRATION_COLUMNS)
         lines.append(f"| {row['method']} | {row['fit']} | {cells} |")
+    before = report.get("vector_log_loss_before")
+    if before is not None:
+        lines += [
+            "",
+            "The top-label log loss is the binary loss of the largest probability against "
+            f"being right. The log loss of the whole vector is {before:.4f} before recalibration.",
+        ]
     for row in report["rows"]:
         if row.get("temperatures"):
             values = ", ".join(f"{t:.3f}" for t in row["temperatures"])
-            lines += ["", f"Temperatures fitted on vectors: {values}."]
+            lines += [
+                "",
+                f"Temperatures fitted on vectors: {values}. Log loss of the whole vector "
+                f"after scaling: {row['vector_log_loss']:.4f}.",
+            ]
     return "\n".join(lines) + "\n"
 
 

@@ -154,6 +154,25 @@ def test_recalibrate_on_vectors_and_with_a_separate_fitting_file(tmp_path, capsy
     out = capsys.readouterr().out
     assert "each map is fitted on the other file" in out
     assert "Temperatures fitted on vectors: " in out
+    assert "| Brier | top-label log loss | AUROC |" in out
+    assert "The log loss of the whole vector is " in out
+    assert "Log loss of the whole vector after scaling: " in out
+
+
+def test_recalibration_report_separates_top_label_and_vector_log_loss(tmp_path, capsys):
+    path = write_jsonl(tmp_path / "v.jsonl", vector_rows(4))
+    args = ["recalibrate", path, "--logits", "logits", "--method", "temperature"]
+    report = run_json(capsys, args)
+    before = report["vector_log_loss_before"]
+    after = report["rows"][-1]["vector_log_loss"]
+    assert after < before  # the logits were twice too large, so scaling helps the vector loss
+    assert before > report["rows"][0]["log_loss"]  # four-way loss, not the binary one
+    plain = write_jsonl(tmp_path / "c.jsonl", confidence_rows(0))
+    report = run_json(capsys, ["recalibrate", plain, "--method", "platt"])
+    assert report["vector_log_loss_before"] is None
+    assert main(["recalibrate", plain, "--method", "platt"]) == 0
+    out = capsys.readouterr().out
+    assert "| top-label log loss |" in out and "whole vector" not in out
 
 
 def test_compare_matches_items_by_id(tmp_path, capsys, overconfident):
