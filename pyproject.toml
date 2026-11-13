@@ -23,7 +23,15 @@ classifiers = [
 dependencies = ["numpy>=1.23"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.4"]
+plot = ["matplotlib>=3.6"]
+dev = [
+    "pytest>=7",
+    "pytest-cov>=4",
+    "ruff>=0.4",
+    "matplotlib>=3.6",
+    "scikit-learn>=1.2",
+    "scipy>=1.9",
+]
 
 [project.scripts]
 calibcheck = "calibcheck.cli:main"
