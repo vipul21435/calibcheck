@@ -406,10 +406,12 @@ command).
   Platt and rises to 0.6211 for isotonic regression.
 - Isotonic regression and histogram binning show an ECE of exactly 0 on the items they were
   fitted on and 0.0106 and 0.0177 held out, which is the trap described at the top.
-- The comparison does not show that the larger model is better calibrated: the difference in
-  plug-in ECE (7b minus 70b) is 0.0131 with an interval of [-0.0076, 0.0292], and for the
-  debiased ECE 0.0144 [-0.0089, 0.0319]. Accuracy (-0.2642 [-0.2892, -0.2419]) and AUROC
-  (-0.1440 [-0.1641, -0.1216]) do differ.
+- On the top-label ECE the comparison does not show that the larger model is better
+  calibrated: the difference in plug-in ECE (7b minus 70b) is 0.0131 with an interval of
+  [-0.0076, 0.0292], and for the debiased ECE 0.0144 [-0.0089, 0.0319]. On the classwise ECE,
+  which looks at all four letters, it does: 0.0207 [0.0115, 0.0278] plug-in and 0.0209
+  [0.0115, 0.0281] debiased. Accuracy (-0.2642 [-0.2892, -0.2419]) and AUROC (-0.1440
+  [-0.1641, -0.1216]) differ clearly.
 
 These confidences are a softmax over four answer letters under one prompt format on one
 benchmark. They say nothing about the confidence the same models would state in words, and
