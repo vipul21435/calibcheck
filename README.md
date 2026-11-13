@@ -10,8 +10,8 @@ finite number of items per bin, a perfectly calibrated model still shows a gap b
 and mean confidence in every bin, so a small non-zero number can come from the estimator
 rather than from the model. Recalibration has a matching trap: a map fitted and scored on the
 same items always looks good. calibcheck reports the plug-in and the debiased estimate side by
-side, puts an interval on every number, tests the result against what a calibrated model would
-show, and only scores recalibration on items the map was not fitted on.
+side, puts a bootstrap interval on every metric of a model, tests the result against what a
+calibrated model would show, and scores recalibration on items the map was not fitted on.
 
 ## Install
 
@@ -118,8 +118,9 @@ calibcheck compare model_a.jsonl model_b.jsonl --id id
 
 `diagram` writes a reliability diagram with consistency bands and prints a test of
 calibration; `compare` takes two models on the same items and reports each metric, the
-difference and a paired bootstrap interval. Every command takes `--format json`, `--bins`,
-`--binning width|mass` and `--seed`. `python examples/quickstart.py` does the same from Python.
+difference and a paired bootstrap interval. Every command takes `--bins`, `--binning
+width|mass` and `--seed`, and all but `diagram` take `--format json`. `python
+examples/quickstart.py` shows the same steps from Python.
 
 ### Input
 
