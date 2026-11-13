@@ -254,7 +254,9 @@ def build_comparison_report(
     """Metrics of two models on the same items and a paired bootstrap of the differences.
 
     Items are matched by id when both sides have ids, by position otherwise. The same
-    resampled items (or groups, taken from ``a``) are used for both models.
+    resampled items (or groups, taken from ``a``) are used for both models. When both sides
+    hold probability vectors the classwise ECE and the log loss and Brier score of the whole
+    vector are compared too (the classwise terms only if no vector had to be padded).
     """
     order = np.arange(len(b))
     if a.ids is not None and b.ids is not None:
@@ -266,10 +268,18 @@ def build_comparison_report(
         raise ValueError(f"the two files differ in length: {len(a)} and {len(b)} items")
     ca, ya = a.confidence, a.correct
     cb, yb = b.confidence[order], b.correct[order]
+    vectors = all(x is not None for x in (a.probs, b.probs, a.label, b.label))
+    classwise = vectors and not a.ragged and not b.ragged
+    if vectors:
+        pb, lb = b.probs[order], b.label[order]
 
     def both(idx: np.ndarray) -> tuple[dict[str, float], dict[str, float]]:
         sa = summary(ca[idx], ya[idx], n_bins=n_bins, strategy=strategy, coverage=coverage)
         sb = summary(cb[idx], yb[idx], n_bins=n_bins, strategy=strategy, coverage=coverage)
+        if vectors:
+            options = {"n_bins": n_bins, "strategy": strategy, "classwise": classwise}
+            sa.update(vector_summary(a.probs[idx], a.label[idx], **options))
+            sb.update(vector_summary(pb[idx], lb[idx], **options))
         return sa, sb
 
     def difference(idx: np.ndarray) -> dict[str, float]:
@@ -296,6 +306,7 @@ def build_comparison_report(
         "b": sources[1],
         "n_items": len(a),
         "matched_by": "id" if a.ids is not None and b.ids is not None else "position",
+        "vectors": bool(vectors),
         "binning": {"strategy": strategy, "requested_bins": int(n_bins)},
         "coverage": coverage,
         "intervals": {

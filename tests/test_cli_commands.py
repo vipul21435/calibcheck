@@ -251,3 +251,29 @@ def test_recalibrate_warns_when_the_temperature_ends_on_a_bound(tmp_path, capsys
         "calibcheck: warning: temperature search stopped at the edge of its range" in captured.err
     )
     assert "| temperature | 5 folds | " in captured.out
+
+
+def test_compare_includes_vector_metrics_when_both_files_hold_vectors(tmp_path, capsys):
+    a = write_jsonl(tmp_path / "a.jsonl", vector_rows(6))
+    b = write_jsonl(tmp_path / "b.jsonl", vector_rows(6, scale=1.0))
+    args = ["compare", a, b, "--logits", "logits", "--id", "id", "--bootstrap", "40"]
+    report = run_json(capsys, args)
+    by_metric = {row["metric"]: row for row in report["rows"]}
+    assert report["vectors"]
+    for key in ("classwise_ece", "classwise_ece_debiased", "nll", "brier_multiclass"):
+        assert key in by_metric
+    lo, hi = by_metric["nll"]["interval"]
+    assert 0 < lo <= by_metric["nll"]["difference"] <= hi  # logits of A are twice too large
+    assert by_metric["accuracy"]["difference"] == 0.0
+    same = run_json(capsys, ["compare", a, a, "--logits", "logits", "--bootstrap", "20"])
+    assert all(row["difference"] == 0.0 for row in same["rows"])
+    assert main(args) == 0
+    out = capsys.readouterr().out
+    assert "| classwise ECE, plug-in | 0." in out
+    assert "| log loss of the full vector | " in out
+
+
+def test_compare_of_plain_confidences_has_no_vector_rows(tmp_path, capsys, overconfident):
+    report = run_json(capsys, ["compare", overconfident, overconfident, "--bootstrap", "10"])
+    assert not report["vectors"]
+    assert "nll" not in {row["metric"] for row in report["rows"]}

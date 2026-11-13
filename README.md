@@ -117,7 +117,8 @@ the items state a confidence of exactly 1, whose logit is unbounded, and one tem
 cannot pull those down without flattening everything else (see Limitations).
 
 `compare` takes two models on the same items and reports each metric, the difference and a
-paired bootstrap interval. `examples/example_b.jsonl` is a second simulated model on the same
+paired bootstrap interval; with vectors in both files that includes the classwise ECE and the
+log loss and Brier score of the whole vector. `examples/example_b.jsonl` is a second simulated model on the same
 400 items, calibrated by construction. The first rows of the output:
 
 ```
