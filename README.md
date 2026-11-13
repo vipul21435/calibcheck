@@ -462,6 +462,9 @@ the bootstrap treats the 57 subjects as the units, which makes the intervals wid
 - [evalstats](https://github.com/vipul21435/evalstats): error bars and paired comparisons for
   evaluation scores in general; use it for accuracy, and calibcheck for confidence.
 - [judgebias](https://github.com/vipul21435/judgebias): audit of LLM judges.
+- [ppieval](https://github.com/vipul21435/ppieval): combines a few human labels with many automatic judgments and keeps the interval valid.
+- [labelfuse](https://github.com/vipul21435/labelfuse): aggregates noisy labels from several annotators into one label with a probability, and audits the annotators.
+- [metaeval](https://github.com/vipul21435/metaeval): correlates automatic metrics or graders with human ratings, with the grouping stated and an interval on every number.
 
 ## Licence
 
