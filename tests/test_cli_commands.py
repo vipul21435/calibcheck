@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -210,3 +211,13 @@ def test_report_holds_the_risk_coverage_curve(overconfident, capsys):
     assert main(["metrics", overconfident, "--bootstrap", "0"]) == 0
     out = capsys.readouterr().out
     assert "| coverage | 10% | 20% | 30% | 40% | 50% | 60% | 70% | 80% | 90% | 100% |" in out
+
+
+def test_compare_runs_on_the_two_bundled_examples(capsys):
+    examples = Path(__file__).resolve().parents[1] / "examples"
+    args = ["compare", str(examples / "example.jsonl"), str(examples / "example_b.jsonl")]
+    report = run_json(capsys, [*args, "--id", "id", "--bootstrap", "100"])
+    by_metric = {row["metric"]: row for row in report["rows"]}
+    assert report["n_items"] == 400 and report["matched_by"] == "id"
+    assert by_metric["ece"]["a"] == pytest.approx(0.1210, abs=5e-5)
+    assert by_metric["l2_ce_debiased"]["difference"] > 0

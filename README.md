@@ -116,16 +116,37 @@ fitted on; held out, they do not. Temperature scaling makes this example worse: 
 the items state a confidence of exactly 1, whose logit is unbounded, and one temperature
 cannot pull those down without flattening everything else (see Limitations).
 
-The other two commands:
+`compare` takes two models on the same items and reports each metric, the difference and a
+paired bootstrap interval. `examples/example_b.jsonl` is a second simulated model on the same
+400 items, calibrated by construction. The first rows of the output:
 
 ```
-calibcheck diagram examples/example.jsonl --output reliability.png
-calibcheck compare model_a.jsonl model_b.jsonl --id id
+$ calibcheck compare examples/example.jsonl examples/example_b.jsonl --id id
+# Calibration comparison
+
+A: examples/example.jsonl
+B: examples/example_b.jsonl
+
+400 items matched by id. Differences are A - B; 95% intervals: paired bootstrap over items, 1000 resamples.
+
+| metric | A | B | A - B | 95% interval |
+|---|---|---|---|---|
+| accuracy | 0.7150 | 0.7525 | -0.0375 | [-0.0925, 0.0175] |
+| mean confidence | 0.8300 | 0.7564 | 0.0736 | [0.0678, 0.0790] |
+| ECE, plug-in | 0.1210 | 0.0388 | 0.0822 | [0.0273, 0.1273] |
+| ECE, debiased | 0.1126 | 0.0281 | 0.0845 | [0.0224, 0.1397] |
 ```
 
 `diagram` writes a reliability diagram with consistency bands and prints a test of
-calibration; `compare` takes two models on the same items and reports each metric, the
-difference and a paired bootstrap interval. Every command takes `--bins`, `--binning
+calibration (it needs the `plot` extra):
+
+```
+$ calibcheck diagram examples/example.jsonl --binning mass --output reliability.png
+wrote reliability.png
+consistency test: plug-in ECE 0.1210; under calibration its mean is 0.0334 and its 95% quantile 0.0521; p = 0.0010 (1000 resamples)
+```
+
+Every command takes `--bins`, `--binning
 width|mass` and `--seed`, and all but `diagram` take `--format json`. `python
 examples/quickstart.py` shows the same steps from Python.
 
