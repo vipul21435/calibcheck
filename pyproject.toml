@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "calibcheck"
+version = "0.1.0.dev0"
+description = "Measure how well a model's stated confidence matches how often it is right."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Vipul Raj Jha" }]
+keywords = ["calibration", "expected calibration error", "brier score", "evaluation", "confidence"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = ["numpy>=1.23"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.4"]
+
+[project.scripts]
+calibcheck = "calibcheck.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/vipul21435/calibcheck"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/calibcheck"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.coverage.run]
+source = ["calibcheck"]
