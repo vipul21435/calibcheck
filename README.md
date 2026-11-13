@@ -1,10 +1,7 @@
 # calibcheck
 
-Measure how well a model's stated confidence matches how often it is right.
-
-**Status: early scaffold (0.1.0.dev0).** The pieces under "What works so far" are implemented
-and tested. Intervals, recalibration, diagrams, model comparison and results on real data are
-not there yet; they are listed under "Not implemented yet".
+Measure how well a model's stated confidence matches how often it is right, with intervals,
+and test whether recalibration on held-out data fixes it.
 
 ## Why this is hard
 
@@ -12,7 +9,9 @@ The usual estimator of calibration error is biased upward and depends on the bin
 finite number of items per bin, a perfectly calibrated model still shows a gap between accuracy
 and mean confidence in every bin, so a small non-zero number can come from the estimator
 rather than from the model. Recalibration has a matching trap: a map fitted and scored on the
-same items always looks good.
+same items always looks good. calibcheck reports the plug-in and the debiased estimate side by
+side, puts an interval on every number, tests the result against what a calibrated model would
+show, and only scores recalibration on items the map was not fitted on.
 
 ## Install
 
@@ -20,12 +19,14 @@ same items always looks good.
 pip install git+https://github.com/vipul21435/calibcheck
 ```
 
-Python 3.10 or later. The only runtime dependency is numpy.
+Python 3.10 or later. The only runtime dependency is numpy; `pip install
+"calibcheck[plot] @ git+https://github.com/vipul21435/calibcheck"` adds matplotlib for the
+`diagram` command.
 
 ## Quickstart
 
 The input is a JSONL or CSV file with one item per line: a confidence in [0, 1] and whether
-the answer was correct.
+the answer was correct (or a probability vector and a label, see "Input").
 
 ```
 {"id": "q001", "confidence": 0.7, "correct": true}
@@ -41,22 +42,28 @@ $ calibcheck metrics examples/example.jsonl --binning mass
 # Calibration report: examples/example.jsonl
 
 400 items, 7 equal-mass bins.
+95% intervals: percentile bootstrap over items, 1000 resamples.
 
-| metric | value |
-|---|---|
-| accuracy | 0.7150 |
-| mean confidence | 0.8300 |
-| ECE, plug-in | 0.1210 |
-| MCE | 0.2439 |
-| squared calibration error, plug-in | 0.0183 |
-| squared calibration error, debiased | 0.0146 |
-| L2 calibration error, plug-in | 0.1352 |
-| L2 calibration error, debiased | 0.1207 |
-| Brier score | 0.2158 |
-| reliability | 0.0183 |
-| resolution | 0.0062 |
-| uncertainty | 0.2038 |
-| within-bin term | 0.0000 |
+| metric | value | 95% interval |
+|---|---|---|
+| accuracy | 0.7150 | [0.6725, 0.7575] |
+| mean confidence | 0.8300 | [0.8172, 0.8420] |
+| ECE, plug-in | 0.1210 | [0.0896, 0.1670] |
+| ECE, debiased | 0.1126 | [0.0782, 0.1636] |
+| MCE | 0.2439 | [0.1617, 0.3830] |
+| squared calibration error, plug-in | 0.0183 | [0.0112, 0.0346] |
+| squared calibration error, debiased | 0.0146 | [0.0077, 0.0308] |
+| L2 calibration error, plug-in | 0.1352 | [0.1056, 0.1861] |
+| L2 calibration error, debiased | 0.1207 | [0.0878, 0.1756] |
+| Brier score | 0.2158 | [0.1876, 0.2446] |
+| reliability | 0.0183 | [0.0112, 0.0346] |
+| resolution | 0.0062 | [0.0028, 0.0192] |
+| uncertainty | 0.2038 | [0.1837, 0.2202] |
+| within-bin term | 0.0000 | [0.0000, 0.0000] |
+| log loss | 1.2696 | [0.8624, 1.7081] |
+| AUROC | 0.5833 | [0.5217, 0.6456] |
+| AURC | 0.2443 | [0.1873, 0.3016] |
+| accuracy at 80% coverage | 0.7423 | [0.6968, 0.7873] |
 
 | bin | items | mean confidence | accuracy | gap |
 |---|---|---|---|---|
@@ -71,39 +78,64 @@ $ calibcheck metrics examples/example.jsonl --binning mass
 
 Because the example is simulated, the error of the process behind it is known:
 `python examples/make_example.py` prints a squared calibration error of 0.0087 and an ECE of
-0.0833. On these 400 draws the plug-in estimate of the squared error is 0.0183 and the
-debiased estimate is 0.0146. One sample of this size is noisy either way; the test suite
-checks the bias of both estimators over thousands of simulated samples instead.
+0.0833. On these 400 draws the plug-in estimates are 0.0183 and 0.1210 and their intervals
+miss the known values; the debiased estimates are 0.0146 and 0.1126 and their intervals
+contain them. That is one sample; `python examples/bias_simulation.py` averages over 3000.
 
-Options of `calibcheck metrics`: `--bins N` (default 15), `--binning width` (default) or
-`mass`, `--confidence FIELD` and `--correct FIELD` to name the fields, `--format json`,
-`--output PATH`.
+Recalibration is scored on held-out folds. `--in-sample` adds, for contrast, the same maps
+fitted and scored on the same items:
 
-From Python:
+```
+$ calibcheck recalibrate examples/example.jsonl --in-sample
+# Recalibration report: examples/example.jsonl
 
-```python
-from calibcheck import summary
+400 items; each map is fitted on 4 of 5 folds and scored on the held-out fold. Metrics use 15 equal-width bins.
 
-confidence = [0.9, 0.9, 0.9, 0.9, 0.6, 0.6]
-correct = [1, 1, 1, 0, 1, 0]
-out = summary(confidence, correct, n_bins=10)
-print(round(out["ece"], 4), round(out["sq_ce_plugin"], 4), round(out["sq_ce_debiased"], 4))
-# 0.1333 0.0183 -0.1067
+| method | fitted on | ECE, plug-in | ECE, debiased | L2 CE, debiased | Brier | log loss | AUROC |
+|---|---|---|---|---|---|---|---|
+| none | - | 0.1210 | 0.1126 | 0.1206 | 0.2158 | 1.2696 | 0.5833 |
+| temperature | 5 folds | 0.1752 | 0.1738 | 0.1746 | 0.2336 | 0.6637 | 0.5718 |
+| temperature | same items (optimistic) | 0.1750 | 0.1747 | 0.1758 | 0.2331 | 0.6606 | 0.5833 |
+| platt | 5 folds | 0.0556 | 0.0537 | 0.0473 | 0.2056 | 0.6025 | 0.4709 |
+| platt | same items (optimistic) | 0.0039 | -0.0152 | 0.0000 | 0.2033 | 0.5966 | 0.5833 |
+| isotonic | 5 folds | 0.0339 | 0.0164 | 0.0170 | 0.2026 | 0.5954 | 0.5364 |
+| isotonic | same items (optimistic) | 0.0000 | -0.0326 | 0.0000 | 0.1977 | 0.5837 | 0.5864 |
+| histogram | 5 folds | 0.0570 | 0.0424 | 0.0705 | 0.2039 | 0.5986 | 0.5338 |
+| histogram | same items (optimistic) | 0.0000 | -0.0326 | 0.0000 | 0.1975 | 0.5833 | 0.5895 |
 ```
 
-Six items give a plug-in ECE of 0.13 and a debiased squared error below zero: the observed
-gaps are smaller than the sampling variance estimated for bins this small, so these six items
-are no evidence of miscalibration.
+Isotonic regression and histogram binning reach an ECE of exactly zero on the items they were
+fitted on; held out, they do not. Temperature scaling makes this example worse: a tenth of
+the items state a confidence of exactly 1, whose logit is unbounded, and one temperature
+cannot pull those down without flattening everything else (see Limitations).
 
-## What works so far
+The other two commands:
 
-- Equal-width bins and equal-mass bins. Equal-mass bins keep tied confidences together, so
-  the result does not depend on the order of the items.
-- ECE (plug-in) and MCE.
-- Squared calibration error, plug-in and debiased, and its square root.
-- Brier score with the reliability, resolution and uncertainty terms.
-- A loader for JSONL and CSV that reports problems with file name and line number.
-- `calibcheck metrics` with Markdown and JSON output.
+```
+calibcheck diagram examples/example.jsonl --output reliability.png
+calibcheck compare model_a.jsonl model_b.jsonl --id id
+```
+
+`diagram` writes a reliability diagram with consistency bands and prints a test of
+calibration; `compare` takes two models on the same items and reports each metric, the
+difference and a paired bootstrap interval. Every command takes `--format json`, `--bins`,
+`--binning width|mass` and `--seed`. `python examples/quickstart.py` does the same from Python.
+
+### Input
+
+| what the file holds | options |
+|---|---|
+| a confidence and a correctness flag | `--confidence FIELD --correct FIELD` (the defaults are those names) |
+| a probability vector and the true class index | `--probs FIELD --label FIELD` |
+| a vector of logits or log-likelihoods | `--logits FIELD --label FIELD` |
+| confidence as text ("85%", "0.85", "high") | `--stated`, `--words map.json`, `--scale auto\|unit\|percent` |
+| a group per item (topic, document, source) | `--group FIELD`: resample and split whole groups |
+
+With vectors the confidence is the largest probability (top-label) and the report adds the
+classwise ECE and the log loss and Brier score of the whole vector. With `--stated` the report
+adds how many distinct values the model used and how often it chose multiples of 5 and 10.
+The built-in word scale has five steps (very low 0.1, low 0.3, medium 0.5, high 0.7, very high
+0.9); it is a convention, so pass the map that matches your own prompt.
 
 ## How it works
 
@@ -115,10 +147,11 @@ al. (2017) write `((m-1)/M, m/M]`; the two conventions differ only for values ex
 edge, which is common for stated confidences such as 0.8 or 0.9. Edges are computed as the
 correctly rounded `i/B`, so 0.3 always falls in the bin that starts at 0.3. For equal-mass
 bins the sorted confidences are cut at positions `k*n // B` and each edge is the value found
-at a cut; duplicate edges collapse, so there can be fewer bins than requested, and none is
-empty.
+at a cut; tied confidences stay in one bin, duplicate edges collapse (so there can be fewer
+bins than requested) and no bin is empty.
 
-**ECE and MCE** (Guo et al., 2017, who use 15 bins, the default here):
+**ECE and MCE** (Naeini et al., 2015, in the form of Guo et al., 2017, who use 15 bins, the
+default here):
 
 ```
 ECE = sum_b (n_b / n) * |acc_b - conf_b|        MCE = max_b |acc_b - conf_b|
@@ -139,6 +172,29 @@ ignored; it is small for narrow bins. The debiased value can be negative. The L2
 error is its square root, clipped at zero first. A bin with a single item has no variance
 estimate and adds nothing to the debiased value; the report says how many such bins there are.
 
+**Debiased ECE** (the same paper, Definition G.3, which it calls a heuristic). Redraw each bin
+accuracy as `R_b ~ N(acc_b, acc_b * (1 - acc_b) / n_b)` and subtract the expected excess:
+
+```
+debiased ECE = ECE - ( E[ sum_b (n_b / n) * |conf_b - R_b| ] - ECE )
+```
+
+The paper estimates the expectation by simulation; `E|conf_b - R_b|` is the mean of a folded
+normal, so calibcheck computes it in closed form. This reduces the bias and does not remove
+it. Averages over 3000 simulated samples of 200 items with a known truth:
+
+```
+$ python examples/bias_simulation.py
+true ECE | plug-in ECE | debiased ECE | true sq. | plug-in sq. | debiased sq.
+  0.0000 |      0.0675 |       0.0402 |   0.0000 |      0.0075 |      -0.0000
+  0.0500 |      0.0807 |       0.0560 |   0.0025 |      0.0103 |       0.0025
+  0.1000 |      0.1121 |       0.0944 |   0.0100 |      0.0180 |       0.0101
+```
+
+The debiased squared error is on target in every row. The debiased ECE removes about 40 % of
+the bias at a true error of zero and overshoots downward at 0.1; treat it as a correction,
+not as an unbiased estimate.
+
 **Brier score** (Brier, 1950) is `mean((c_i - y_i)^2)`. Murphy (1973) partitions it as
 
 ```
@@ -153,35 +209,201 @@ within-bin term, `Brier - (reliability - resolution + uncertainty)`, equal to th
 variance of the confidences minus twice their within-bin covariance with the outcomes. The
 reliability term is the plug-in squared calibration error.
 
+**Top-label and classwise.** With probability vectors, top-label metrics use the largest
+probability and whether that class is right. The classwise ECE bins the probability of each
+class against `label == k` and averages over the `K` classes; with equal-width bins this is
+the static calibration error of Nixon et al. (2019).
+
+**Ranking.** AUROC is the probability that a right answer has higher confidence than a wrong
+one (ties count one half). The risk-coverage curve gives the error rate among the `k` most
+confident items for every `k` (selective prediction, Geifman and El-Yaniv, 2017); AURC is its
+mean and "accuracy at 80% coverage" one point on it. Tied confidences cannot be ordered, so
+within a run of ties the errors are spread evenly, which is the expectation over a random
+order. These three do not measure calibration; they are reported because a recalibration map
+can change them.
+
+**Intervals.** Every metric gets a percentile interval from a bootstrap over items, or over
+whole groups when `--group` is given, since items that share a topic or a prompt are not
+independent. `compare` resamples the same items for both models and reports the interval of
+the difference.
+
+**Consistency resampling** (Bröcker and Smith, 2007). Draw confidences with replacement,
+then draw each outcome as a coin flip with that confidence. The surrogate data are calibrated
+by construction, so the spread of their bin accuracies is the band a calibrated model would
+stay in, and the share of surrogates whose plug-in ECE is at least the observed one is a
+p-value for "calibrated". The bias of the plug-in ECE cancels here because the surrogates
+carry the same bias.
+
+**Recalibration** (the four maps as described by Guo et al., 2017). Temperature scaling
+`sigmoid(logit(c) / T)`, or `softmax(z / T)` on a whole vector, with `T` minimising the log
+loss; Platt scaling `sigmoid(a * logit(c) + b)` by maximum likelihood; isotonic regression by
+pool adjacent violators, interpolated linearly; histogram binning with equal-mass bins. Items
+are split into folds (whole groups with `--group`), each map is fitted on all folds but one and
+applied to the held-out fold, and the metrics are computed on the pooled held-out predictions.
+`--fit-on FILE` fits on a separate file instead.
+
+**Stated confidence.** Kadavath et al. (2022) and Tian et al. (2023) study confidence that a
+language model states about its own answer. `--stated` reads such values ("85%", "0.85",
+phrases from a configurable map) and reports their digit preference.
+
 References:
 
 - G. W. Brier (1950). Verification of forecasts expressed in terms of probability. Monthly
   Weather Review 78(1), 1-3.
 - A. H. Murphy (1973). A new vector partition of the probability score. Journal of Applied
   Meteorology 12(4), 595-600.
+- J. Bröcker, L. A. Smith (2007). Increasing the reliability of reliability diagrams. Weather
+  and Forecasting 22(3), 651-661.
+- M. P. Naeini, G. Cooper, M. Hauskrecht (2015). Obtaining well calibrated probabilities using
+  Bayesian binning. Proceedings of the AAAI Conference on Artificial Intelligence 29(1).
 - C. Guo, G. Pleiss, Y. Sun, K. Q. Weinberger (2017). On calibration of modern neural
   networks. https://arxiv.org/abs/1706.04599
+- Y. Geifman, R. El-Yaniv (2017). Selective classification for deep neural networks.
+  https://arxiv.org/abs/1705.08500
 - A. Kumar, P. Liang, T. Ma (2019). Verified uncertainty calibration. NeurIPS 2019.
   https://arxiv.org/abs/1909.10155
+- J. Nixon, M. Dusenberry, G. Jerfel, T. Nguyen, J. Liu, L. Zhang, D. Tran (2019). Measuring
+  calibration in deep learning. https://arxiv.org/abs/1904.01685
+- S. Kadavath and 35 others (2022). Language models (mostly) know what they know.
+  https://arxiv.org/abs/2207.05221
+- K. Tian, E. Mitchell, A. Zhou, A. Sharma, R. Rafailov, H. Yao, C. Finn, C. D. Manning
+  (2023). Just ask for calibration: strategies for eliciting calibrated confidence scores from
+  language models fine-tuned with human feedback. EMNLP 2023. https://arxiv.org/abs/2305.14975
 
-## Not implemented yet
+## Results on real public data
 
-- A debiased variant of the ECE itself (only the squared error has one so far).
-- Classwise and top-label variants from full probability vectors, log loss, AUROC of
-  confidence for correctness, the risk-coverage curve, AURC and accuracy at fixed coverage.
-- Bootstrap intervals (clustered when a group column is given), consistency bands for
-  reliability diagrams and a test of calibration against them.
-- Recalibration (temperature scaling, Platt scaling, isotonic regression, histogram binning)
-  fitted on one split and scored on another.
-- Parsing of stated confidences such as "85%" or word scales, and digit preference.
-- The `diagram`, `recalibrate` and `compare` commands.
-- Results on real public data. Every number in this README comes from the simulated example.
+**Data.** The archived Open LLM Leaderboard keeps, for every model it evaluated, per-question
+details on the Hugging Face Hub. The two datasets used here are
+[details_meta-llama__Llama-2-7b-hf](https://huggingface.co/datasets/open-llm-leaderboard-old/details_meta-llama__Llama-2-7b-hf)
+and
+[details_meta-llama__Llama-2-70b-hf](https://huggingface.co/datasets/open-llm-leaderboard-old/details_meta-llama__Llama-2-70b-hf).
+For each of the 14,042 MMLU test questions (57 subjects, five-shot prompt) they hold the
+log-likelihood the model gave to each of the four answer letters and the index of the right
+one; a softmax over the four values is the model's probability vector.
+
+**Licence.** Neither dataset page states one: the metadata has no licence field and the
+"Licensing Information" section of the card reads "[More Information Needed]" (checked on
+2026-11-13). So no rows are committed here. `scripts/fetch_leaderboard_details.py` downloads
+the files (about 26 MB per model); only the numbers below and the two diagrams are derived
+from them.
+
+```
+uv run --with pyarrow python scripts/fetch_leaderboard_details.py \
+    --repo open-llm-leaderboard-old/details_meta-llama__Llama-2-7b-hf \
+    --run 2023-08-29T17:54:59.197645 --out data/llama-2-7b.jsonl
+uv run --with pyarrow python scripts/fetch_leaderboard_details.py \
+    --repo open-llm-leaderboard-old/details_meta-llama__Llama-2-70b-hf \
+    --run 2023-08-22T13:47:53.141854 --out data/llama-2-70b.jsonl
+
+calibcheck metrics data/llama-2-7b.jsonl --logits logits --group subject
+calibcheck metrics data/llama-2-70b.jsonl --logits logits --group subject
+calibcheck diagram data/llama-2-7b.jsonl --logits logits \
+    -o docs/reliability-llama-2-7b.png --title "Llama-2-7b on MMLU (5-shot), top answer"
+calibcheck diagram data/llama-2-70b.jsonl --logits logits \
+    -o docs/reliability-llama-2-70b.png --title "Llama-2-70b on MMLU (5-shot), top answer"
+calibcheck recalibrate data/llama-2-7b.jsonl --logits logits --group subject --in-sample
+calibcheck compare data/llama-2-7b.jsonl data/llama-2-70b.jsonl --logits logits --id id \
+    --group subject
+```
+
+Top-label metrics with 15 equal-width bins. Intervals are 95 % percentile intervals from a
+bootstrap over the 57 subjects (1000 resamples, seed 0):
+
+| metric | Llama-2-7b | Llama-2-70b |
+|---|---|---|
+| accuracy | 0.4276 [0.3814, 0.4725] | 0.6919 [0.6305, 0.7483] |
+| ECE, plug-in | 0.0241 [0.0135, 0.0424] | 0.0110 [0.0077, 0.0282] |
+| ECE, debiased | 0.0229 [0.0104, 0.0414] | 0.0085 [0.0035, 0.0275] |
+| L2 calibration error, debiased | 0.0233 [0.0147, 0.0449] | 0.0045 [0.0000, 0.0319] |
+| classwise ECE, plug-in | 0.0343 [0.0285, 0.0458] | 0.0136 [0.0124, 0.0244] |
+| Brier score | 0.2126 [0.2059, 0.2186] | 0.1509 [0.1301, 0.1726] |
+| AUROC | 0.6890 [0.6614, 0.7146] | 0.8330 [0.8013, 0.8565] |
+| AURC | 0.3968 [0.3419, 0.4603] | 0.1114 [0.0769, 0.1599] |
+| plug-in ECE of a calibrated model (mean, 95 % quantile) | 0.0090, 0.0132 | 0.0085, 0.0117 |
+| consistency test, p | 0.0010 | 0.1079 |
+
+The last two rows come from the `diagram` command (1000 surrogates; 0.0010 is the smallest
+p-value that 1000 surrogates can give).
+
+![Reliability diagram of Llama-2-7b on MMLU](docs/reliability-llama-2-7b.png)
+![Reliability diagram of Llama-2-70b on MMLU](docs/reliability-llama-2-70b.png)
+
+Recalibration of Llama-2-7b, each map fitted on four folds of subjects and scored on the
+fifth (`recalibrate`, above):
+
+| method | fitted on | ECE, plug-in | ECE, debiased | log loss |
+|---|---|---|---|---|
+| none | - | 0.0241 | 0.0229 | 0.6135 |
+| temperature on the four-way vector | 5 folds | 0.0232 | 0.0220 | 0.6138 |
+| temperature on the top-label confidence | 5 folds | 0.0123 | 0.0103 | 0.6130 |
+| Platt | 5 folds | 0.0105 | 0.0075 | 0.6131 |
+| isotonic | 5 folds | 0.0106 | 0.0072 | 0.6211 |
+| isotonic | same items (optimistic) | 0.0000 | -0.0089 | 0.6099 |
+| histogram | 5 folds | 0.0177 | 0.0157 | 0.6155 |
+| histogram | same items (optimistic) | 0.0000 | -0.0081 | 0.6129 |
+
+The five temperatures fitted on the four-way vectors were 1.019, 1.047, 1.037, 1.063 and
+1.026.
+
+**What this shows, stated carefully.**
+
+- The plug-in ECE of Llama-2-70b, 0.0110, is not evidence of miscalibration. A calibrated
+  model with the same confidences would show 0.0085 on average from sampling noise alone, the
+  consistency test gives p = 0.11, and the interval of the debiased L2 error reaches zero.
+- Llama-2-7b is measurably miscalibrated (p = 0.001), by about 0.02: its accuracy is below
+  its confidence for confidences under 0.47 and above it between 0.6 and 0.87.
+- Temperature scaling of the four-way vector, fitted on held-out subjects, barely moves that
+  (0.0241 to 0.0232): the fitted temperatures are within 7 % of 1, and one temperature cannot
+  lower low confidences and raise high ones at once. A map on the top-label confidence can
+  (0.0105 to 0.0123 for temperature, Platt and isotonic); log loss moves by less than 0.001
+  for temperature and Platt and rises to 0.6211 for isotonic regression.
+- Isotonic regression and histogram binning show an ECE of exactly 0 on the items they were
+  fitted on and 0.0106 and 0.0177 held out, which is the trap described at the top.
+- The comparison does not show that the larger model is better calibrated: the difference in
+  plug-in ECE (7b minus 70b) is 0.0131 with an interval of [-0.0076, 0.0292], and for the
+  debiased ECE 0.0144 [-0.0089, 0.0319]. Accuracy (-0.2642 [-0.2892, -0.2419]) and AUROC
+  (-0.1440 [-0.1641, -0.1216]) do differ.
+
+These confidences are a softmax over four answer letters under one prompt format on one
+benchmark. They say nothing about the confidence the same models would state in words, and
+the bootstrap treats the 57 subjects as the units, which makes the intervals wide.
 
 ## Limitations
 
-- With equal-mass bins the edges come from the same items that are then scored; the
-  unbiasedness argument for the debiased estimator assumes bins fixed in advance.
-- All binned metrics change with the number of bins. Report the binning with the number.
+- All binned metrics depend on the number and kind of bins. Report the binning with the
+  number, and prefer the debiased values and the consistency test when a number is small.
+- The debiased ECE is a heuristic and keeps part of the bias (see "How it works"); the
+  debiased squared error is unbiased only for bins fixed in advance and confidences that are
+  constant within a bin. With equal-mass bins the edges come from the scored items.
+- Percentile intervals of the plug-in ECE inherit its upward bias and will not cover zero for
+  a calibrated model. Use the consistency test for that question.
+- The consistency test and its bands treat items as independent; they ignore `--group`.
+- Temperature and Platt scaling work on the logit of the confidence, which is unbounded at 0
+  and 1 (clipped at 1e-12 from either end). With many confidences stated as exactly 0 or 1
+  they fit poorly, as the quickstart shows; isotonic regression or histogram binning are the
+  safer choice there. Platt scaling is plain maximum likelihood, without smoothed targets.
+- Pooled held-out predictions come from one map per fold, so AUROC and AURC after
+  cross-fitting are slightly pessimistic (the quickstart table shows Platt scaling falling
+  below 0.5), and isotonic regression overfits on a few hundred items.
+- Classwise metrics need vectors of one length; for ragged vectors only top-label metrics,
+  log loss and Brier score are reported. Classwise L2 and bootstrap intervals for the
+  recalibration table are not implemented.
+- The word scale for stated confidence is a five-step convention, not a measured mapping,
+  and no real data set of stated confidences has been analysed here: the stated-confidence
+  path is covered by tests and synthetic input only.
+- Only one real source (two models, one benchmark) has been run.
+
+## Related tools
+
+- [uncertainty-calibration](https://github.com/p-lambda/verified_calibration) by the authors
+  of the debiased estimator: calibration error with bootstrap intervals and their
+  Platt-scaling-plus-binning calibrator (MIT), which calibcheck does not implement.
+- [scikit-learn](https://scikit-learn.org/stable/modules/calibration.html): `calibration_curve`
+  and `CalibratedClassifierCV` (sigmoid, isotonic, temperature) for fitting calibrated
+  classifiers. Its isotonic regression is the reference in this test suite.
+- [evalstats](https://github.com/vipul21435/evalstats): error bars and paired comparisons for
+  evaluation scores in general; use it for accuracy, and calibcheck for confidence.
+- [judgebias](https://github.com/vipul21435/judgebias): audit of LLM judges.
 
 ## Licence
 
