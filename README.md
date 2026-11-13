@@ -354,7 +354,8 @@ bootstrap over the 57 subjects (1000 resamples, seed 0):
 | consistency test, p | 0.0010 | 0.1079 |
 
 The last two rows come from the `diagram` command (1000 surrogates; 0.0010 is the smallest
-p-value that 1000 surrogates can give).
+p-value that 1000 surrogates can give). That test treats the questions as independent, which
+makes it reject more readily than a test over subjects would.
 
 ![Reliability diagram of Llama-2-7b on MMLU](docs/reliability-llama-2-7b.png)
 ![Reliability diagram of Llama-2-70b on MMLU](docs/reliability-llama-2-70b.png)
@@ -380,9 +381,14 @@ The five temperatures fitted on the four-way vectors were 1.019, 1.047, 1.037, 1
 
 - The plug-in ECE of Llama-2-70b, 0.0110, is not evidence of miscalibration. A calibrated
   model with the same confidences would show 0.0085 on average from sampling noise alone, the
-  consistency test gives p = 0.11, and the interval of the debiased L2 error reaches zero.
-- Llama-2-7b is measurably miscalibrated (p = 0.001), by about 0.02: its accuracy is below
-  its confidence for confidences under 0.47 and above it between 0.6 and 0.87.
+  consistency test gives p = 0.11 even though it leans towards rejecting, and the interval of
+  the debiased L2 error reaches zero.
+- Llama-2-7b is measurably miscalibrated, by about 0.02: its accuracy is below its confidence
+  for confidences under 0.47 and above it between 0.6 and 0.87. The evidence that keeps the
+  subjects as the units is the bootstrap interval of its debiased squared error, 0.0005
+  [0.0002, 0.0020] in the `metrics` output above, which excludes zero. The consistency test
+  rejects as well (p = 0.001), but it treats the 14,042 questions as independent, so that
+  p-value is smaller than it should be by an unknown amount.
 - Temperature scaling of the four-way vector, fitted on held-out subjects, barely moves that
   (0.0241 to 0.0232): the fitted temperatures are within 7 % of 1, and one temperature cannot
   lower low confidences and raise high ones at once. A map on the top-label confidence can
