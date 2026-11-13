@@ -21,10 +21,14 @@ def small_file(tmp_path):
 
 
 def test_metrics_as_json(small_file, capsys):
-    assert main(["metrics", str(small_file), "--bins", "10", "--format", "json"]) == 0
+    assert (
+        main(["metrics", str(small_file), "--bins", "10", "--bootstrap", "0", "--format", "json"])
+        == 0
+    )
     report = json.loads(capsys.readouterr().out)
     assert report["source"] == str(small_file)
     assert report["n_items"] == 6
+    assert "intervals" not in report
     assert report["binning"] == {
         "strategy": "width",
         "requested_bins": 10,
@@ -52,7 +56,7 @@ def test_metrics_as_json(small_file, capsys):
 
 
 def test_metrics_as_markdown(small_file, capsys):
-    assert main(["metrics", str(small_file), "--bins", "10"]) == 0
+    assert main(["metrics", str(small_file), "--bins", "10", "--bootstrap", "0"]) == 0
     out = capsys.readouterr().out
     assert out.startswith(f"# Calibration report: {small_file}\n")
     assert "6 items, 10 equal-width bins (8 empty)." in out
@@ -63,7 +67,10 @@ def test_metrics_as_markdown(small_file, capsys):
 
 
 def test_equal_mass_binning_merges_tied_values(small_file, capsys):
-    assert main(["metrics", str(small_file), "--bins", "10", "--binning", "mass"]) == 0
+    assert (
+        main(["metrics", str(small_file), "--bins", "10", "--binning", "mass", "--bootstrap", "0"])
+        == 0
+    )
     out = capsys.readouterr().out
     assert "6 items, 2 equal-mass bins." in out
     assert "| [0.000, 0.900) | 2 | 0.6000 | 0.5000 | -0.1000 |" in out
@@ -76,6 +83,7 @@ def test_output_file_and_csv_field_names(tmp_path, capsys):
     out_path = tmp_path / "report.json"
     code = main(
         ["metrics", str(data), "--confidence", "p", "--correct", "ok", "--bins", "10"]
+        + ["--bootstrap", "0"]
         + ["--format", "json", "--output", str(out_path)]
     )
     assert code == 0
@@ -92,7 +100,7 @@ def test_single_item_bins_are_mentioned(tmp_path, capsys):
         '{"confidence": 0.85, "correct": 0}\n',
         encoding="utf-8",
     )
-    assert main(["metrics", str(path), "--bins", "10"]) == 0
+    assert main(["metrics", str(path), "--bins", "10", "--bootstrap", "0"]) == 0
     assert "1 bin(s) hold a single item" in capsys.readouterr().out
 
 
@@ -137,7 +145,7 @@ def test_tiny_negative_values_are_not_printed_as_minus_zero():
 
 def test_module_entry_point_runs_on_the_bundled_example():
     done = subprocess.run(
-        [sys.executable, "-m", "calibcheck", "metrics", str(EXAMPLE)],
+        [sys.executable, "-m", "calibcheck", "metrics", str(EXAMPLE), "--bootstrap", "0"],
         capture_output=True,
         text=True,
         check=False,
